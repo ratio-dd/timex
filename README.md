@@ -1,44 +1,70 @@
-# TimeX — M0
+# TimeX
 
-一个 AWS 无关、完全离线的四立场协商 POC。需求见 [docs/POC.md](docs/POC.md)。当前仅实现 M0：事业、探索、生活、健康各自提出意见，再读取共同的第一轮意见进行回应，协调器保留共识与分歧。最终决定由用户作出，不自动执行。
+让四个 Agent 分别从事业、探索、生活、健康的角度讨论个人时间安排。它们先独立提出建议，再回应彼此意见，最后由协调器整理方案、让步和分歧，交给用户决定。
+
+当前已实现两轮 LangGraph 协商、CSV 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 的代码和离线测试已完成，真实模型案例可通过手动触发的 GitHub Actions 工作流运行，等待配置 Secret 后实测。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
 
 ## 安装与运行
 
-Python 3.11+；本云环境已用 Python 3.12.14 验证。
+Python 3.11+。
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements-dev.lock
+python -m pip install -r requirements-live.lock
 python -m pip install --no-deps --no-build-isolation -e .
 python -m pip check
 python -m pytest -q
 python -m timex.cli --csv examples/demo_events.csv
 ```
 
-云环境已有 `/workspace/.venvs/timex`，可直接 `source /workspace/.venvs/timex/bin/activate`，在 `/workspace/timex` 运行后两条命令。
+云环境已有 `/workspace/.venvs/timex`，可运行 `source /workspace/.venvs/timex/bin/activate`，然后在 `/workspace/timex` 执行 CLI。仅需 fake 演示时也可安装 `requirements-dev.lock`。
 
 ```bash
-# 结构化结果；已有文件不会被覆盖
-python -m timex.cli --format json --output outputs/result.json
-# 单次调用的探索立场对照
-python -m timex.cli --baseline --output outputs/baseline.json
-# 完整可读报告
-python -m timex.cli --output outputs/result.md
+# 四立场协商，保存 JSON
+python -m timex.cli --format json --output outputs/council.json
+# 一个助手同时考虑四项利益
+python -m timex.cli --baseline --output outputs/single.json
+# 同议题的多 Agent / 单助手对照，保存可读报告
+python -m timex.cli --compare --output outputs/comparison.md
+# 结构化对照结果
+python -m timex.cli --compare --format json --output outputs/comparison.json
 ```
 
-默认读取合成的 `examples/demo_request.json`。`--csv` 用内部标准 CSV 替换请求中的摘要；请求必须明确 7/30 天时间范围；`requested_minutes` 默认为演示所用的 180 分钟，其他议题请显式指定，不从自然语言猜测投入时长。CSV 的时间戳必须带时区，按摘要指定时区的本地日期截取。跨日记录裁剪、完全重复记录去重、重叠区间拒绝；未知分类转为 `other` 并提示，缺口计为 `untracked`，不视为休闲。`load_summary(..., category_map={...})` 支持分类映射。真实 aTimeLogger 导出需要以后单独增加适配器。
+默认使用 `MODEL_PROVIDER=fake` 和合成的 `examples/demo_request.json`。CLI 会保留已有输出文件；再次运行时请选择新路径。JSON 与 Markdown 是两种输出格式，上面的两条对照命令各自运行一次实验；已有 JSON 可按 [M1 文档](docs/M1.md) 转成 Markdown。
 
-## fake 的含义与边界
+## 使用 DeepSeek 等兼容服务
 
-fake 是实现 LangChain `BaseChatModel` 的本地规则模型，响应取决于摘要、显式投入时长、议题及同伴建议，不调用网络或付费模型。规则仅用于验证数据流：职业收益未知时不声称有收益；事业立场对明确非功利议题可建议零投入；探索先缩小实验；生活保护已有安排；健康在有足够记录且已记录睡眠较少时主张零新增投入。第二轮根据其他立场的具体时间上限缩小建议，也允许与零投入意见保持分歧。它不是自然语言理解器，也不能证明真实模型协商有效；没有医疗诊断。
+推荐在 GitHub 的 `test-env` Environment 中保存 `DEEPSEEK_API_KEY`，手动运行 **DeepSeek M1 smoke** 工作流。默认 `check` 模式仅验证 Secret 是否存在及价格配置；选择 `live` 后使用 `deepseek-flash` 跑一次合成案例对照，并提供 JSON / Markdown 下载；配置步骤见 [M1 文档](docs/M1.md#github-actions-实测推荐)。
 
-固定串行 4+4+1=9 次调用，最多 10 次（`MAX_MODEL_CALLS` 可降低）；无自动重试或反思循环。`Limits` 可设置单次/总超时和输入/输出字符上限。fake 无 tokenizer，用字符边界控制长度，Token 用量保持 `null`，本地 fake 模型估算费用为 $0；不将字符数伪装成 Token 数。失败返回 `partial`、已经验证的轮次和错误状态，CLI 返回非零退出码。超时调用的 daemon 线程可能运行到该次本地调用结束，但不会重试或启动后续调用；M0 不是不可信代码隔离系统。
+工作流已包含公开价格默认值；GitHub Variables 可选，用于覆盖价格配置。API Key 使用 Environment Secret。
 
-`MODEL_PROVIDER` 默认 `fake`，其他值和 `--live` 一律拒绝；没有 Bedrock/AgentCore SDK 或模型供应商实现。调用时关闭 LangSmith tracing。程序不保存原始 prompt/CSV 日志，私有数据、环境变量文件、凭证及输出目录忽略于 Git。合成报告见 [examples/demo-result.md](examples/demo-result.md)。
+普通 Python 环境也可运行：通过环境 Secret 设置 `OPENAI_API_KEY`，然后执行：
 
-## 验证与后续
+```bash
+# 载入模型名、端点、输出模式及当前保守价格配置
+source examples/deepseek.env.example
+python -m timex.cli --live --compare --format json --output outputs/live-comparison.json
+```
 
-pytest 验证 CSV 聚合与坏数据、时区/跨日/DST/覆盖率、两轮事实隔离、9 次调用、预算与超时、坏响应、同伴意见引发修订、真实分歧、输出契约以及 CLI。GitHub Actions 在 Python 3.11/3.12 上执行锁定依赖安装、pytest 和 fake CLI；本地验证不代表 GitHub CI 已运行。
+配置示例使用 `deepseek-flash`，对应 V4.1 Flash，依据 [DeepSeek 官方文档](https://api-docs.deepseek.com/quick_start/pricing/)（2026-10-12 核对）。示例按高峰、缓存未命中价格配置输入 $0.30、输出 $1.20／百万 Token，并关闭思考模式以配合短输出预算。显式加入 `--live` 后发起真实请求。报告保存两种方案、同一份摘要与约束、调用次数、Token、按配置价格估算的费用、时延和待填写的人工评分。
 
-`examples/comparison-results.json` 给出冲突型、探索型、恢复型三个合成议题的单视角/多视角对照；请由用户人工评分，不预设多 Agent 更好。M1 真实模型、价格配置与真实质量评估，M2 AWS 部署、OIDC、清理，以及真实 aTimeLogger 导入均未实现。
+## 运行限制与结果
+
+议会通常调用 9 次，最多 10 次；格式错误和临时网络错误合计最多重试 1 次。单助手通常调用 1 次，最多 2 次。对照中的两次运行分别应用预算，默认每次费用估算上限 $0.25，合计最多 $0.50 的软预算。调用失败或触发限制时返回 `partial` 和已验证的结果，CLI 退出码为 1；议会未完成时跳过单助手调用。
+
+每次调用都有输入估算、输出 Token 上限、字符限制与超时。SDK 自动重试已关闭。供应商返回的 Token 用于调用后计量；缺失计量时报告 `null`，预算继续保留保守估算。配置项及估算边界见 [docs/M1.md](docs/M1.md)。
+
+## 时间数据
+
+`--request` 指定议题 JSON，`--csv` 用内部标准 CSV 替换其中的时间摘要。请求明确指定 7/30 天范围；`requested_minutes` 默认 180 分钟，其他议题可显式修改。CSV 使用 `start_at,end_at,category`，时间戳带时区，按摘要指定时区的本地日期截取。
+
+聚合器裁剪跨日记录、去除完全重复记录、拒绝重叠区间，并报告覆盖率。未知分类归入 `other`，缺口归入 `untracked`。`load_summary(..., category_map={...})` 支持分类映射。真实 aTimeLogger 导出格式待取得样例后增加适配。
+
+## 示例与验证
+
+[离线对照报告](examples/m1-comparison-fake.md) 展示完整流程；fake 是基于摘要与同伴意见的规则模型，用来验证数据流。真实讨论效果需结合 live 报告人工评价。
+
+pytest 覆盖 CSV、事实隔离、交叉回应、分歧契约、调用与费用预算、Token 计量、重试、超时、provider 和 CLI。CI 在 Python 3.11/3.12 上运行 fake 流程，provider 测试通过内存 HTTP 响应验证 SDK 行为。
+
+真实输入放在 `data/private/`，运行结果放在 `outputs/`，凭证通过环境 Secrets 提供；这些本地路径已加入 Git 忽略规则。模型接收分类摘要和手动约束。M2 的 AgentCore 部署、OIDC 和云端验证按后续里程碑推进。

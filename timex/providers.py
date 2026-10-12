@@ -1,5 +1,6 @@
-"""Only a local LangChain ChatModel is available in M0; no live fallback."""
+"""Replaceable LangChain models; importing this module never calls a service."""
 import json
+import os
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -7,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from .models import DeliberationRequest, ROLES
+from .config import Limits, ModelSettings
 
 
 def initial(payload: dict[str, Any]) -> dict[str, Any]:
@@ -79,6 +81,8 @@ def synthesize(payload: dict[str, Any]) -> dict[str, Any]:
     unanimous = len(set(proposals.values())) == 1
     amount = min(proposals.values())
     conflict = [] if unanimous else ["新增投入时长存在分歧：" + "；".join(f"{role}={minutes} 分钟" for role, minutes in proposals.items())]
+    conflict.extend(f"{role}：{objection}" for role in ROLES
+                    for objection in payload["round2"][role]["remaining_objections"])
     text = (f"各方修订后的时长一致：可考虑 {amount} 分钟，用户可拒绝。" if unanimous else
             f"未达成一致。保守候选是新增 {amount} 分钟；其他时长及健康顾虑待用户裁决。")
     return {"shared_ground": ["保留用户约束，建议不自动执行，用户可拒绝。"],
@@ -97,12 +101,78 @@ class DeliberationFakeModel(BaseChatModel):
 
     def _generate(self, messages: list[BaseMessage], stop=None, run_manager=None, **kwargs) -> ChatResult:
         payload = json.loads(messages[-1].content)
-        handlers = {"initial": initial, "revise": revise, "synthesis": synthesize}
+        handlers = {"initial": initial, "revise": revise, "synthesis": synthesize, "baseline": baseline}
         output = handlers[payload["stage"]](payload)
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=json.dumps(output, ensure_ascii=False)))])
 
 
-def make_model(provider: str = "fake") -> BaseChatModel:
-    if provider != "fake":
-        raise ValueError("M0 supports only MODEL_PROVIDER=fake; live calls are unavailable")
-    return DeliberationFakeModel()
+def baseline(payload: dict[str, Any]) -> dict[str, Any]:
+    positions = {role: initial({**payload, "role": role}) for role in ROLES}
+    amount = min(position["suggested_minutes"] for position in positions.values())
+    return {"considerations": {role: position["reasons"][0] for role, position in positions.items()},
+            "proposed_plan": {"text": f"单助手综合四项利益，候选投入 {amount} 分钟；用户可拒绝。",
+                              "suggested_minutes": amount, "conditions": payload["request"]["constraints"]},
+            "tradeoffs": ["各利益的时间建议可能不同，较少投入会牺牲探索机会。"],
+            "evidence_refs": ["question", "constraints", "time_summary"],
+            "unknowns": ["fake 演示规则；无法据此评价真实模型质量。"], "requires_user_decision": True}
+
+
+def make_model(provider: str | None = None, *, live: bool = False,
+               settings: ModelSettings | None = None, limits: Limits | None = None) -> BaseChatModel:
+    settings = settings or ModelSettings.from_env(provider)
+    settings.authorize(live)
+    if settings.provider == "fake":
+        return DeliberationFakeModel()
+    if not os.getenv("OPENAI_API_KEY"):
+        raise ValueError("OPENAI_API_KEY must be configured in environment secrets")
+    try:
+        from langchain_openai import ChatOpenAI
+        from langchain_openai.chat_models.base import BaseChatOpenAI
+    except ImportError as error:
+        raise ValueError("install TimeX live dependencies first") from error
+    limits = limits or Limits()
+    # Compatible endpoints (including DeepSeek) use max_tokens. ChatOpenAI itself
+    # rewrites this to OpenAI's newer max_completion_tokens field.
+    model_class = BaseChatOpenAI if settings.base_url else ChatOpenAI
+    return model_class(model=settings.model_name, base_url=settings.base_url,
+                      max_tokens=limits.max_output_tokens, timeout=limits.call_timeout_seconds,
+                      max_retries=0, streaming=False, stream_usage=False,
+                      use_responses_api=False, cache=False, http_socket_options=(),
+                      extra_body={"thinking": {"type": settings.thinking}} if settings.thinking else None,
+                      model_kwargs={"response_format": {"type": "json_object"}})
+
+
+def retryable(error: Exception) -> bool:
+    """SDK retries are disabled; only transient failures qualify for our shared retry."""
+    try:
+        from openai import APIConnectionError, APIStatusError, APITimeoutError
+    except ImportError:
+        return False
+    if isinstance(error, APITimeoutError):
+        return False
+    return isinstance(error, APIConnectionError) or (
+        isinstance(error, APIStatusError) and (error.status_code == 429 or error.status_code >= 500))
+
+
+def truncated_response(error: Exception):
+    """The SDK's JSON parser raises on truncation but retains billable usage."""
+    try:
+        from openai import LengthFinishReasonError
+    except ImportError:
+        return None
+    if not isinstance(error, LengthFinishReasonError):
+        return None
+    usage = error.completion.usage
+    metadata = ({"input_tokens": usage.prompt_tokens, "output_tokens": usage.completion_tokens,
+                 "total_tokens": usage.total_tokens} if usage else None)
+    return AIMessage(content="", usage_metadata=metadata, response_metadata={"finish_reason": "length"})
+
+
+def timed_out(error: Exception) -> bool:
+    if isinstance(error, TimeoutError):
+        return True
+    try:
+        from openai import APITimeoutError
+    except ImportError:
+        return False
+    return isinstance(error, APITimeoutError)

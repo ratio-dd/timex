@@ -1,77 +1,16 @@
-import json
-import os
-import queue
-import threading
-import time
-from dataclasses import dataclass
+"""The same bounded, serial LangGraph workflow for fake and live ChatModels."""
 from typing import TypedDict
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langsmith import tracing_context
-from pydantic import ValidationError
 
+from .calling import BoundedCaller, error_kind
+from .config import Limits, ModelSettings
 from .models import (CouncilResult, DeliberationRequest, InitialPosition, ROLES,
-                     RevisedPosition, Synthesis, Usage)
+                     RevisedPosition, SingleAdvice, Synthesis)
 from .providers import make_model
 from .roles import ROLE_INTERESTS
-
-
-@dataclass(frozen=True)
-class Limits:
-    max_model_calls: int = 10
-    call_timeout_seconds: float = 5
-    total_timeout_seconds: float = 30
-    max_input_characters: int = 30000
-    max_output_characters: int = 12000
-
-    def __post_init__(self):
-        if not 1 <= self.max_model_calls <= 10:
-            raise ValueError("max_model_calls must be in 1..10")
-        if min(self.call_timeout_seconds, self.total_timeout_seconds,
-               self.max_input_characters, self.max_output_characters) <= 0:
-            raise ValueError("limits must be positive")
-
-
-class BoundedCaller:
-    def __init__(self, model: BaseChatModel, limits: Limits):
-        self.model, self.limits = model, limits
-        self.started = time.monotonic()
-        self.calls = 0
-
-    def invoke(self, payload, schema):
-        encoded = json.dumps(payload, ensure_ascii=False)
-        if len(encoded) > self.limits.max_input_characters:
-            raise ValueError("input length limit exceeded")
-        remaining = self.limits.total_timeout_seconds - (time.monotonic() - self.started)
-        if remaining <= 0:
-            raise TimeoutError("total timeout exceeded")
-        if self.calls >= self.limits.max_model_calls:
-            raise ValueError("model call budget exhausted")
-        self.calls += 1
-        responses = queue.Queue(maxsize=1)
-        messages = [SystemMessage(content="四个利益视角的离线演示。仅使用共同事实，回复 JSON。"), HumanMessage(content=encoded)]
-
-        def invoke():
-            try:
-                with tracing_context(enabled=False):
-                    responses.put((True, self.model.invoke(messages, config={"callbacks": []})))
-            except Exception as error:
-                responses.put((False, error))
-
-        # A timed-out invocation is abandoned; no retries or subsequent calls follow.
-        worker = threading.Thread(target=invoke, daemon=True)
-        worker.start()
-        try:
-            ok, result = responses.get(timeout=min(remaining, self.limits.call_timeout_seconds))
-        except queue.Empty as error:
-            raise TimeoutError("model/total timeout exceeded") from error
-        if not ok:
-            raise RuntimeError("model invocation failed") from result
-        if not isinstance(result.content, str) or len(result.content) > self.limits.max_output_characters:
-            raise ValueError("output length or type limit exceeded")
-        return schema.model_validate_json(result.content)
 
 
 class State(TypedDict):
@@ -81,13 +20,38 @@ class State(TypedDict):
     errors: list[str]
 
 
+def caller_for(model, limits, provider, settings, live):
+    if settings is not None and provider is not None and settings.provider != provider:
+        raise ValueError("conflicting provider configuration")
+    settings = settings or ModelSettings.from_env(provider)
+    settings.authorize(live)
+    limits = limits or Limits.from_env()
+    return BoundedCaller(model if model is not None else make_model(settings=settings, limits=limits, live=live),
+                         limits, settings)
+
+
+def validate_evidence(refs, request):
+    if not refs:
+        raise ValueError("evidence references are required")
+    for ref in refs:
+        value = request
+        for key in ref.split("."):
+            if not isinstance(value, dict) or key not in value:
+                raise ValueError("unknown evidence reference")
+            value = value[key]
+
+
+def validate_plan(plan, request):
+    if plan.suggested_minutes > request.requested_minutes:
+        raise ValueError("plan exceeds requested investment")
+    if not set(request.constraints).issubset(plan.conditions):
+        raise ValueError("plan omitted user constraints")
+
+
 def run_council(request: DeliberationRequest, *, model: BaseChatModel | None = None,
-                limits: Limits | None = None, provider: str | None = None) -> CouncilResult:
-    provider = provider or os.getenv("MODEL_PROVIDER", "fake")
-    # Reject live even when a model was injected. M0 production entry points are offline only.
-    if provider != "fake":
-        raise ValueError("M0 only supports fake")
-    caller = BoundedCaller(model if model is not None else make_model(provider), limits or Limits())
+                limits: Limits | None = None, provider: str | None = None,
+                settings: ModelSettings | None = None, live: bool = False) -> CouncilResult:
+    caller = caller_for(model, limits, provider, settings, live)
     request_json = request.model_dump(mode="json")
     workflow = StateGraph(State)
 
@@ -104,26 +68,34 @@ def run_council(request: DeliberationRequest, *, model: BaseChatModel | None = N
                 if stage == "synthesis":
                     payload["round2"] = state["round2"]
                 schema = {"initial": InitialPosition, "revise": RevisedPosition, "synthesis": Synthesis}[stage]
-                result = caller.invoke(payload, schema)
-                if role and result.suggested_minutes > request.requested_minutes:
-                    raise ValueError("proposal exceeds requested investment")
+
+                def validate(result):
+                    if role and result.suggested_minutes > request.requested_minutes:
+                        raise ValueError("proposal exceeds requested investment")
+                    if stage == "initial" and caller.settings.provider != "fake":
+                        validate_evidence(result.evidence_refs, request_json)
+                    if stage == "revise":
+                        for response in result.responses_to_others:
+                            if response.role == role or response.cited_position != state["round1"][response.role]["position"]:
+                                raise ValueError("untraceable peer response")
+                        if not result.change_explanation.strip():
+                            raise ValueError("revision requires explanation")
+                    if stage == "synthesis":
+                        amounts = {item["suggested_minutes"] for item in state["round2"].values()}
+                        objections = any(item["remaining_objections"] for item in state["round2"].values())
+                        if (len(amounts) > 1 or objections) and not result.unresolved_conflicts:
+                            raise ValueError("synthesis concealed disagreement")
+                        validate_plan(result.proposed_plan, request)
+
+                result = caller.invoke(payload, schema, validate)
                 if stage == "initial":
                     return {"round1": {**state["round1"], role: result.model_dump()}}
                 if stage == "revise":
-                    for response in result.responses_to_others:
-                        if response.role == role or response.cited_position != state["round1"][response.role]["position"]:
-                            raise ValueError("untraceable peer response")
                     return {"round2": {**state["round2"], role: result.model_dump()}}
-                amounts = {item["suggested_minutes"] for item in state["round2"].values()}
-                if len(amounts) > 1 and not result.unresolved_conflicts:
-                    raise ValueError("synthesis concealed disagreement")
-                if result.proposed_plan.suggested_minutes > request.requested_minutes:
-                    raise ValueError("plan exceeds requested investment")
                 return {"synthesis": result.model_dump()}
-            except (ValueError, TimeoutError, RuntimeError, ValidationError) as error:
-                # Never include raw model output or private prompts in errors/logs.
-                kind = "timeout" if isinstance(error, TimeoutError) else "invocation" if isinstance(error, RuntimeError) else "contract_or_limit"
-                return {"errors": [f"{stage}:{role or 'coordinator'} failed: {kind}"]}
+            except (ValueError, TimeoutError, RuntimeError) as error:
+                # Never include raw model output, HTTP bodies, or prompts in diagnostics.
+                return {"errors": [f"{stage}:{role or 'coordinator'} failed: {error_kind(error)}"]}
         return execute
 
     previous = START
@@ -140,14 +112,27 @@ def run_council(request: DeliberationRequest, *, model: BaseChatModel | None = N
         state = workflow.compile().invoke({"round1": {}, "round2": {}, "synthesis": {}, "errors": []},
                                           {"recursion_limit": 12})
     return CouncilResult(question=request.question, round1=state["round1"], round2=state["round2"],
-                         **state["synthesis"], usage=Usage(model_calls=caller.calls,
-                         elapsed_seconds=round(time.monotonic() - caller.started, 4)),
+                         **state["synthesis"], usage=caller.usage(),
                          status="partial" if state["errors"] else "complete", errors=state["errors"])
 
 
-def run_single(request: DeliberationRequest) -> dict:
-    """One-call exploration perspective baseline, explicitly narrower than the council."""
-    caller = BoundedCaller(make_model(), Limits())
-    position = caller.invoke({"stage": "initial", "role": "curiosity", "request": request.model_dump(mode="json")}, InitialPosition)
-    return {"perspective": "curiosity", "position": position.model_dump(), "usage": Usage(model_calls=caller.calls).model_dump(),
-            "limitations": "单一探索视角对照；不是无偏的真实模型质量评估。"}
+def run_single(request: DeliberationRequest, *, model: BaseChatModel | None = None,
+               limits: Limits | None = None, provider: str | None = None,
+               settings: ModelSettings | None = None, live: bool = False) -> dict:
+    """One balanced assistant sees exactly the council's facts, without peer responses."""
+    caller = caller_for(model, limits, provider, settings, live)
+    request_json = request.model_dump(mode="json")
+    advice, errors = None, []
+
+    def validate(result):
+        validate_plan(result.proposed_plan, request)
+        validate_evidence(result.evidence_refs, request_json)
+
+    try:
+        advice = caller.invoke({"stage": "baseline", "interests": ROLE_INTERESTS,
+                                "request": request_json}, SingleAdvice, validate).model_dump()
+    except (ValueError, TimeoutError, RuntimeError) as error:
+        errors = [f"baseline failed: {error_kind(error)}"]
+    return {"question": request.question, "perspective": "balanced", "advice": advice,
+            "usage": caller.usage().model_dump(), "status": "partial" if errors else "complete", "errors": errors,
+            "limitations": "单助手同时考虑四项利益；一次案例不证明多 Agent 优于单 Agent。"}

@@ -111,7 +111,8 @@ def test_live_provider_rejected():
 def test_single_baseline():
     result = run_single(request())
     assert result['usage']['model_calls'] == 1
-    assert result['perspective'] == 'curiosity'
+    assert result['perspective'] == 'balanced'
+    assert set(result['advice']['considerations']) == set(ROLES)
 
 
 def test_adequate_recorded_sleep_changes_health_and_allows_agreement():

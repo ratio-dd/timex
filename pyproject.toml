@@ -5,12 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "timex"
 version = "0.1.0"
-description = "Offline four-perspective deliberation POC"
+description = "Bounded four-perspective deliberation POC with replaceable ChatModels"
 requires-python = ">=3.11"
 dependencies = ["langgraph==1.2.14", "langchain==1.4.4", "pydantic==2.14.1"]
 
 [project.optional-dependencies]
 dev = ["pytest==9.1.1"]
+live = ["langchain-openai==1.7.0"]
 
 [project.scripts]
 timex = "timex.cli:main"
