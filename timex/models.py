@@ -134,11 +134,17 @@ class Usage(Contract):
     calls: list["CallUsage"] = Field(default_factory=list)
 
 
+class ValidationIssue(Contract):
+    code: str
+    path: str
+
+
 class CallUsage(Contract):
     stage: str
     role: str
     reported_model: str | None = None
     status: str = "pending"
+    validation_errors: list[ValidationIssue] = Field(default_factory=list)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     estimated_input_tokens: int = Field(ge=0)

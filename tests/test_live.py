@@ -299,3 +299,73 @@ def test_semantic_contracts_reject_invalid_live_result(request_data, settings, f
     assert result.status == 'partial'
     assert result.proposed_plan is None
     assert len(payloads) <= 10
+
+
+def test_evidence_contract_is_explicit_and_repair_is_actionable(request_data, settings):
+    rejected = 'request.time_summary.category_minutes.sleep'
+    def repairable(request, response, attempt):
+        wire = json.loads(request.content)
+        if attempt == 1:
+            data = json.loads(response['choices'][0]['message']['content'])
+            data['evidence_refs'] = [rejected]
+            response['choices'][0]['message']['content'] = json.dumps(data)
+        elif attempt == 2:
+            system = wire['messages'][0]['content']
+            assert 'unknown_evidence_reference' in system
+            assert 'evidence_refs' in system and '不带 request.' in system
+        return httpx.Response(200, json=response)
+    model, payloads = transport_model(settings, repairable)
+    result = run_council(request_data, model=model, settings=settings, live=True)
+    assert result.status == 'complete' and result.usage.model_calls == 10
+    issue = result.usage.calls[0].validation_errors[0]
+    assert issue.code == 'unknown_evidence_reference' and issue.path == 'evidence_refs'
+    # Rejected values are never echoed into a retry or diagnostic artifact.
+    assert rejected not in payloads[1]['messages'][0]['content']
+    schema = json.loads(payloads[0]['messages'][0]['content'].split('\n')[-1])
+    assert 'time_summary.category_minutes.sleep' in schema['properties']['evidence_refs']['items']['enum']
+    assert rejected not in schema['properties']['evidence_refs']['items']['enum']
+
+
+@pytest.mark.parametrize('fault,code,path', [
+    ('json', 'json_invalid', '$'),
+    ('missing', 'missing', 'position'),
+    ('extra', 'extra_forbidden', '<unknown>'),
+    ('wrong_type', 'int_parsing', 'suggested_minutes'),
+    ('evidence', 'unknown_evidence_reference', 'evidence_refs'),
+])
+def test_diagnostics_expose_codes_and_schema_paths_not_values(request_data, settings, fault, code, path):
+    private = 'sensitive-rejected-value-DO-NOT-ECHO'
+    def malformed(request, response, attempt):
+        data = json.loads(response['choices'][0]['message']['content'])
+        if fault == 'missing':
+            del data['position']
+        elif fault == 'extra':
+            data[private] = private
+        elif fault == 'wrong_type':
+            data['suggested_minutes'] = private
+        elif fault == 'evidence':
+            data['evidence_refs'] = [private]
+        response['choices'][0]['message']['content'] = private if fault == 'json' else json.dumps(data)
+        return httpx.Response(200, json=response)
+    model, payloads = transport_model(settings, malformed)
+    result = run_council(request_data, model=model, settings=settings, live=True)
+    assert result.status == 'partial' and len(payloads) == 2
+    assert result.usage.calls[0].validation_errors[0].model_dump() == {'code': code, 'path': path}
+    assert private not in result.model_dump_json()
+    assert private not in payloads[1]['messages'][0]['content']
+    assert code in payloads[1]['messages'][0]['content']
+    from timex.cli import markdown
+    assert code in markdown(result) and private not in markdown(result)
+
+
+def test_schema_locations_redact_untrusted_mapping_keys():
+    from timex.models import SingleAdvice
+    from timex.validation import safe_issues
+    from pydantic import ValidationError
+    private = 'sensitive-dictionary-key'
+    try:
+        SingleAdvice.model_validate({'considerations': {private: 'some value'}})
+    except ValidationError as error:
+        issues = safe_issues(error, SingleAdvice)
+    assert private not in str(issues)
+    assert any('<unknown>' in issue.path for issue in issues)
