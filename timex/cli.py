@@ -40,6 +40,9 @@ def markdown(result: CouncilResult) -> str:
               f"- 输入 / 输出 Token：{result.usage.input_tokens} / {result.usage.output_tokens}（None 表示未知）",
               f"- 计量估算费用（USD）：{result.usage.estimated_usd}；预算占用估算：{result.usage.budget_estimated_usd}",
               f"- 耗时：{result.usage.elapsed_seconds} 秒", *[f"- 错误：{v}" for v in result.errors]]
+    for call in result.usage.calls:
+        for issue in call.validation_errors:
+            lines.append(f"- 校验诊断（{call.stage}/{call.role}）：{issue.code} @ {issue.path}")
     return "\n".join(lines) + "\n"
 
 
