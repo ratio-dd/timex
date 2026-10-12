@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "timex"
+version = "0.1.0"
+description = "Offline four-perspective deliberation POC"
+requires-python = ">=3.11"
+dependencies = ["langgraph==1.2.14", "langchain==1.4.4", "pydantic==2.14.1"]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[project.scripts]
+timex = "timex.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["timex*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

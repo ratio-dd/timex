@@ -1,0 +1,23 @@
+{
+  "required_fields": [
+    "question",
+    "round1",
+    "round2",
+    "shared_ground",
+    "proposed_plan",
+    "unresolved_conflicts",
+    "requires_user_decision",
+    "evidence_limitations",
+    "usage",
+    "status",
+    "errors"
+  ],
+  "roles": [
+    "career",
+    "curiosity",
+    "life",
+    "health"
+  ],
+  "complete_fake_model_calls": 9,
+  "requires_user_decision": true
+}

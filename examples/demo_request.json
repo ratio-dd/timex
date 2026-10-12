@@ -1,0 +1,33 @@
+{
+  "question": "本周是否额外花 3 小时开发 TimeX？",
+  "time_window_days": 7,
+  "requested_minutes": 180,
+  "constraints": [
+    "本周五出行",
+    "本周六有线下活动",
+    "不挤占睡眠"
+  ],
+  "time_summary": {
+    "period_start": "2026-10-05",
+    "period_end": "2026-10-11",
+    "timezone": "Asia/Shanghai",
+    "category_minutes": {
+      "work": 3360.0,
+      "learning": 0.0,
+      "leisure": 840.0,
+      "sleep": 2520.0,
+      "exercise": 0.0,
+      "social": 0.0,
+      "other": 0.0,
+      "untracked": 3360.0
+    },
+    "tracked_minutes": 6720.0,
+    "untracked_minutes": 3360.0,
+    "coverage": 0.6666666666666666,
+    "notes": [
+      "内部标准化 CSV；不是对真实 aTimeLogger 导出格式的假设。",
+      "未记录区间计为 untracked，不视为休闲；分类可能存在偏差。",
+      "以上为演示合成数据，不是用户实际记录。"
+    ]
+  }
+}
