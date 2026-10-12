@@ -2,7 +2,7 @@
 
 让四个 Agent 分别从事业、探索、生活、健康的角度讨论个人时间安排。它们先独立提出建议，再回应彼此意见，最后由协调器整理方案、让步和分歧，交给用户决定。
 
-当前已实现两轮 LangGraph 协商、CSV / aTimeLogger 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 已完成合成输入的真实模型对照；aTimeLogger 真实摘要已在云环境完成只读验证。真实数据的模型对照及人工质量评价仍待完成。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
+当前已实现两轮 LangGraph 协商、CSV / aTimeLogger 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 已完成合成输入的真实模型对照；aTimeLogger 真实摘要已在云环境完成只读验证。用户授权后的真实数据模型对照也已完成，人工质量评价仍待完成。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
 
 ## 安装与运行
 

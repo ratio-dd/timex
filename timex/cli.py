@@ -19,13 +19,13 @@ def markdown(result: CouncilResult) -> str:
         for role, position in positions.items():
             lines += ["", f"### {role}"]
             if title.startswith("第一"):
-                lines += [position.position, "", *[f"- 理由：{v}" for v in position.reasons],
+                lines += [position.position, "", f"- 建议投入：{position.suggested_minutes} 分钟", *[f"- 理由：{v}" for v in position.reasons],
                           *[f"- 顾虑：{v}" for v in position.concerns],
                           *[f"- 接受条件：{v}" for v in position.acceptable_conditions],
                           f"- 证据：{', '.join(position.evidence_refs)}",
                           *[f"- 未知：{v}" for v in position.unknowns]]
             else:
-                lines += [position.revised_position, "", f"- 变化说明：{position.change_explanation}"]
+                lines += [position.revised_position, "", f"- 建议投入：{position.suggested_minutes} 分钟", f"- 变化说明：{position.change_explanation}"]
                 for response in position.responses_to_others:
                     lines += [f"- 回应 {response.role}「{response.cited_position}」：{response.response}"]
                 lines += [*[f"- 让步：{v}" for v in position.concessions],
@@ -49,7 +49,7 @@ def markdown(result: CouncilResult) -> str:
 def comparison_markdown(report):
     lines = ["# TimeX 多 Agent / 单 Agent 对照", "", f"模式：{report['mode']}；状态：{report['status']}",
              f"执行 ID：{report['execution_id']}；时间：{report['created_at']}", "",
-             "## 相同输入（分类摘要与手动约束）", "", "```json",
+             "## 相同输入（议题、分类摘要与约束）", "", "```json",
              json.dumps(report["request"], ensure_ascii=False, indent=2), "```", "",
              markdown(CouncilResult.model_validate(report["council"])), "## 单助手建议", ""]
     single = report["single"]

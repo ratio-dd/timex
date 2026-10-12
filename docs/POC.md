@@ -1,6 +1,6 @@
 # TimeX — Multi-Agent Deliberation POC
 
-> **版本**：v0.1 · **日期**：2026-10-12 · **状态**：待交给 Codex Cloud 实现  
+> **版本**：v0.1 · **日期**：2026-10-12 · **状态**：M0 和 M1 流程已验证，人工质量评价待完成
 > **定位**：AWS 无关的个人多立场协商实验，在 Amazon Bedrock AgentCore 上验证运行。  
 > **主要开发位置**：GitHub 仓库 + Codex Cloud；无需个人电脑保持开机或具备本地开发环境。
 
@@ -314,21 +314,21 @@ Total ≈ Model + Runtime + Logs + Storage + DataTransfer + other services
 
 ### M0 — 可运行的假数据版本（无 AWS，优先完成）
 
-- [ ] GitHub 仓库初始化；本文、README、`.gitignore`。
-- [ ] 输入/输出类型与四个角色 prompt。
-- [ ] LangGraph 两阶段议会 + synthesis。
-- [ ] `fake` 模型、合成 JSON/CSV、CLI 入口。
-- [ ] pytest 通过，CI 不调用云端模型。
-- [ ] 产生一份可读的 `demo-result.md`，展示至少一个立场因他人意见发生改变，或合理地保留分歧。
+- [x] GitHub 仓库初始化；本文、README、`.gitignore`。
+- [x] 输入/输出类型与四个角色 prompt。
+- [x] LangGraph 两阶段议会 + synthesis。
+- [x] `fake` 模型、合成 JSON/CSV、CLI 入口。
+- [x] pytest 通过，CI 不调用云端模型。
+- [x] 产生一份可读的 `demo-result.md`，展示至少一个立场因他人意见发生改变，或合理地保留分歧。
 
 **验收**：在 Codex Cloud 执行一个命令即可跑完整闭环；不需要 AWS 凭证、不开新服务。
 
 ### M1 — 真实模型、但仍 AWS 无关
 
-- [ ] 一个可替换的 LangChain ChatModel provider；可通过环境变量选择。
-- [ ] 一轮真实模型协商，结构化结果稳定；有效限制最大调用次数和 Token。
-- [ ] 实测 1 个多 Agent vs 单 Agent 的案例；记录成本与时延。
-- [ ] 有错误时可有限重试或返回部分结果，不能无界循环。
+- [x] 一个可替换的 LangChain ChatModel provider；可通过环境变量选择。
+- [x] 一轮真实模型协商，结构化结果稳定；有效限制最大调用次数和 Token。
+- [x] 实测 1 个多 Agent vs 单 Agent 的案例；记录成本与时延。
+- [x] 有错误时可有限重试或返回部分结果，不能无界循环。
 
 **验收**：无需 AgentCore 也能运行同一业务逻辑；至少有 1 份真实模型协商报告。
 
