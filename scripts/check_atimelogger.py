@@ -12,6 +12,10 @@ CHECK_NAMES = {"token", "connection", "auth", "types"}
 
 
 def run_cli(*args: str) -> tuple[int, dict]:
+    child_env = os.environ.copy()
+    # Node 24 fetch requires an opt-in to use the managed environment proxy.
+    if child_env.get("HTTPS_PROXY") or child_env.get("HTTP_PROXY"):
+        child_env.setdefault("NODE_USE_ENV_PROXY", "1")
     try:
         result = subprocess.run(
             [str(CLI), *args, "--compact"],
@@ -19,6 +23,7 @@ def run_cli(*args: str) -> tuple[int, dict]:
             text=True,
             timeout=60,
             check=False,
+            env=child_env,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise ValueError("CLI unavailable or timed out; private output suppressed.") from None

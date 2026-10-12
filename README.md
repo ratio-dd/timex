@@ -2,7 +2,7 @@
 
 让四个 Agent 分别从事业、探索、生活、健康的角度讨论个人时间安排。它们先独立提出建议，再回应彼此意见，最后由协调器整理方案、让步和分歧，交给用户决定。
 
-当前已实现两轮 LangGraph 协商、CSV 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 的代码和离线测试已完成，真实模型案例可通过手动触发的 GitHub Actions 工作流运行，等待配置 Secret 后实测。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
+当前已实现两轮 LangGraph 协商、CSV / aTimeLogger 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 已完成合成输入的真实模型对照；aTimeLogger 真实摘要已在云环境完成只读验证。真实数据的模型对照及人工质量评价仍待完成。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
 
 ## 安装与运行
 
@@ -59,7 +59,7 @@ python -m timex.cli --live --compare --format json --output outputs/live-compari
 
 `--request` 指定议题 JSON，`--csv` 用内部标准 CSV 替换其中的时间摘要。请求明确指定 7/30 天范围；`requested_minutes` 默认 180 分钟，其他议题可显式修改。CSV 使用 `start_at,end_at,category`，时间戳带时区，按摘要指定时区的本地日期截取。
 
-聚合器裁剪跨日记录、去除完全重复记录、拒绝重叠区间，并报告覆盖率。未知分类归入 `other`，缺口归入 `untracked`。`load_summary(..., category_map={...})` 支持分类映射。真实 aTimeLogger 导出格式待取得样例后增加适配。
+聚合器裁剪跨日记录、去除完全重复记录、拒绝重叠区间，并报告覆盖率。未知分类归入 `other`，缺口归入 `untracked`。`load_summary(..., category_map={...})` 支持分类映射。aTimeLogger 只读历史适配器使用区间并集，跨类别重叠归入 `other`，使用方式及分类变更规则见 [docs/ATIMELOGGER.md](docs/ATIMELOGGER.md)。
 
 ## 示例与验证
 
