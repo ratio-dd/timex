@@ -1,0 +1,242 @@
+{
+  "question": "本周是否额外花 3 小时开发 TimeX？",
+  "round1": {
+    "career": {
+      "position": "建议新增投入 180 分钟。",
+      "suggested_minutes": 180,
+      "reasons": [
+        "可投入一个可撤回的小实验；这不代表已证明职业回报。"
+      ],
+      "concerns": [
+        "记录与议题不能证明收益或精力状况。"
+      ],
+      "acceptable_conditions": [
+        "本周五出行",
+        "本周六有线下活动",
+        "不挤占睡眠",
+        "不压缩睡眠；不自动执行；用户可拒绝。"
+      ],
+      "evidence_refs": [
+        "question",
+        "time_summary.category_minutes.work"
+      ],
+      "unknowns": [
+        "未来可用时间、实际精力与项目收益未知；合成数据不能代表用户。"
+      ]
+    },
+    "curiosity": {
+      "position": "建议新增投入 120 分钟。",
+      "suggested_minutes": 120,
+      "reasons": [
+        "探索有独立价值，先用有限时长验证兴趣，而不以收入作为唯一尺度。"
+      ],
+      "concerns": [
+        "记录与议题不能证明收益或精力状况。"
+      ],
+      "acceptable_conditions": [
+        "本周五出行",
+        "本周六有线下活动",
+        "不挤占睡眠",
+        "不压缩睡眠；不自动执行；用户可拒绝。"
+      ],
+      "evidence_refs": [
+        "question",
+        "requested_minutes"
+      ],
+      "unknowns": [
+        "未来可用时间、实际精力与项目收益未知；合成数据不能代表用户。"
+      ]
+    },
+    "life": {
+      "position": "建议新增投入 60 分钟。",
+      "suggested_minutes": 60,
+      "reasons": [
+        "保护已有生活和社交安排；记录缺口不是可任意占用的空闲。"
+      ],
+      "concerns": [
+        "记录与议题不能证明收益或精力状况。"
+      ],
+      "acceptable_conditions": [
+        "本周五出行",
+        "本周六有线下活动",
+        "不挤占睡眠",
+        "不压缩睡眠；不自动执行；用户可拒绝。"
+      ],
+      "evidence_refs": [
+        "constraints",
+        "time_summary.category_minutes.leisure",
+        "time_summary.untracked_minutes"
+      ],
+      "unknowns": [
+        "未来可用时间、实际精力与项目收益未知；合成数据不能代表用户。"
+      ]
+    },
+    "health": {
+      "position": "建议新增投入 0 分钟。",
+      "suggested_minutes": 0,
+      "reasons": [
+        "已记录的平均睡眠低于演示规则的 7 小时参考值；优先保留恢复时间，不能据此诊断健康。"
+      ],
+      "concerns": [
+        "记录与议题不能证明收益或精力状况。"
+      ],
+      "acceptable_conditions": [
+        "本周五出行",
+        "本周六有线下活动",
+        "不挤占睡眠",
+        "不压缩睡眠；不自动执行；用户可拒绝。"
+      ],
+      "evidence_refs": [
+        "time_summary.category_minutes.sleep",
+        "time_summary.coverage"
+      ],
+      "unknowns": [
+        "未来可用时间、实际精力与项目收益未知；合成数据不能代表用户。"
+      ]
+    }
+  },
+  "round2": {
+    "career": {
+      "revised_position": "修订后建议新增投入 60 分钟。",
+      "suggested_minutes": 60,
+      "responses_to_others": [
+        {
+          "role": "curiosity",
+          "cited_position": "建议新增投入 120 分钟。",
+          "response": "考虑你提出的 120 分钟上限，将我的建议限制到 60 分钟。"
+        },
+        {
+          "role": "life",
+          "cited_position": "建议新增投入 60 分钟。",
+          "response": "考虑你提出的 60 分钟上限，将我的建议限制到 60 分钟。"
+        },
+        {
+          "role": "health",
+          "cited_position": "建议新增投入 0 分钟。",
+          "response": "你主张 0 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        }
+      ],
+      "concessions": [
+        "将 180 分钟缩减为 60 分钟，以回应其他立场的时间上限。"
+      ],
+      "remaining_objections": [
+        "健康立场建议零新增投入；本建议不是全体共识。"
+      ],
+      "change_explanation": "根据其他角色提出的具体时长缩小实验。"
+    },
+    "curiosity": {
+      "revised_position": "修订后建议新增投入 60 分钟。",
+      "suggested_minutes": 60,
+      "responses_to_others": [
+        {
+          "role": "career",
+          "cited_position": "建议新增投入 180 分钟。",
+          "response": "你主张 180 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        },
+        {
+          "role": "life",
+          "cited_position": "建议新增投入 60 分钟。",
+          "response": "考虑你提出的 60 分钟上限，将我的建议限制到 60 分钟。"
+        },
+        {
+          "role": "health",
+          "cited_position": "建议新增投入 0 分钟。",
+          "response": "你主张 0 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        }
+      ],
+      "concessions": [
+        "将 120 分钟缩减为 60 分钟，以回应其他立场的时间上限。"
+      ],
+      "remaining_objections": [
+        "健康立场建议零新增投入；本建议不是全体共识。"
+      ],
+      "change_explanation": "根据其他角色提出的具体时长缩小实验。"
+    },
+    "life": {
+      "revised_position": "修订后建议新增投入 60 分钟。",
+      "suggested_minutes": 60,
+      "responses_to_others": [
+        {
+          "role": "career",
+          "cited_position": "建议新增投入 180 分钟。",
+          "response": "你主张 180 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        },
+        {
+          "role": "curiosity",
+          "cited_position": "建议新增投入 120 分钟。",
+          "response": "你主张 120 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        },
+        {
+          "role": "health",
+          "cited_position": "建议新增投入 0 分钟。",
+          "response": "你主张 0 分钟；我保留 60 分钟建议，保留分歧并交给用户裁决。"
+        }
+      ],
+      "concessions": [],
+      "remaining_objections": [
+        "健康立场建议零新增投入；本建议不是全体共识。"
+      ],
+      "change_explanation": "已读取其他立场；其建议未消除我的顾虑，保留原时间主张。"
+    },
+    "health": {
+      "revised_position": "修订后建议新增投入 0 分钟。",
+      "suggested_minutes": 0,
+      "responses_to_others": [
+        {
+          "role": "career",
+          "cited_position": "建议新增投入 180 分钟。",
+          "response": "你主张 180 分钟；我保留 0 分钟建议，保留分歧并交给用户裁决。"
+        },
+        {
+          "role": "curiosity",
+          "cited_position": "建议新增投入 120 分钟。",
+          "response": "你主张 120 分钟；我保留 0 分钟建议，保留分歧并交给用户裁决。"
+        },
+        {
+          "role": "life",
+          "cited_position": "建议新增投入 60 分钟。",
+          "response": "你主张 60 分钟；我保留 0 分钟建议，保留分歧并交给用户裁决。"
+        }
+      ],
+      "concessions": [],
+      "remaining_objections": [
+        "优先恢复，暂不接受新增投入。"
+      ],
+      "change_explanation": "已读取其他立场；其建议未消除我的顾虑，保留原时间主张。"
+    }
+  },
+  "shared_ground": [
+    "保留用户约束，建议不自动执行，用户可拒绝。"
+  ],
+  "proposed_plan": {
+    "text": "未达成一致。保守候选是新增 0 分钟；其他时长及健康顾虑待用户裁决。",
+    "suggested_minutes": 0,
+    "conditions": [
+      "本周五出行",
+      "本周六有线下活动",
+      "不挤占睡眠",
+      "不压缩睡眠；用户确认实际精力及空闲。"
+    ]
+  },
+  "unresolved_conflicts": [
+    "新增投入时长存在分歧：career=60 分钟；curiosity=60 分钟；life=60 分钟；health=0 分钟"
+  ],
+  "requires_user_decision": true,
+  "evidence_limitations": [
+    "内部标准化 CSV；不是对真实 aTimeLogger 导出格式的假设。",
+    "未记录区间计为 untracked，不视为休闲；分类可能存在偏差。",
+    "以上为演示合成数据，不是用户实际记录。",
+    "fake 模型按公开演示规则生成，不证明真实模型的协商质量。",
+    "记录缺口、分类偏差、未来可用时间与收益均存在不确定性。"
+  ],
+  "usage": {
+    "provider": "fake",
+    "model_calls": 9,
+    "input_tokens": null,
+    "output_tokens": null,
+    "estimated_usd": 0.0,
+    "elapsed_seconds": 0.0176
+  },
+  "status": "complete",
+  "errors": []
+}
