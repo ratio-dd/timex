@@ -121,12 +121,45 @@ class Synthesis(Contract):
 
 
 class Usage(Contract):
-    provider: Literal["fake"] = "fake"
+    provider: str = "fake"
+    model: str | None = None
     model_calls: int = 0
-    input_tokens: None = None
-    output_tokens: None = None
-    estimated_usd: float = 0.0
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    estimated_usd: float | None = Field(default=0.0, ge=0)
+    budget_estimated_usd: float = Field(default=0.0, ge=0)
+    input_usd_per_million: float | None = None
+    output_usd_per_million: float | None = None
     elapsed_seconds: float = 0.0
+    calls: list["CallUsage"] = Field(default_factory=list)
+
+
+class CallUsage(Contract):
+    stage: str
+    role: str
+    reported_model: str | None = None
+    status: str = "pending"
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    estimated_input_tokens: int = Field(ge=0)
+    reserved_output_tokens: int = Field(ge=0)
+    budget_estimated_usd: float = Field(ge=0)
+    elapsed_seconds: float = 0.0
+
+
+class SingleAdvice(Contract):
+    considerations: dict[Role, str]
+    proposed_plan: Plan
+    tradeoffs: list[str]
+    evidence_refs: list[str]
+    unknowns: list[str]
+    requires_user_decision: Literal[True] = True
+
+    @model_validator(mode="after")
+    def all_interests(self):
+        if set(self.considerations) != set(ROLES):
+            raise ValueError("baseline must consider all four interests")
+        return self
 
 
 class CouncilResult(Contract):

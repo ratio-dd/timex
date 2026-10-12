@@ -1,0 +1,6 @@
+-r requirements-dev.lock
+jiter==0.17.0
+langchain-openai==1.7.0
+openai==3.29.0
+regex==2026.9.29
+tiktoken==0.14.0

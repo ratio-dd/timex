@@ -1,4 +1,4 @@
-name: Offline M0
+name: Offline tests
 on: [push, pull_request]
 permissions:
   contents: read
@@ -19,9 +19,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install -r requirements-dev.lock
+      - run: python -m pip install -r requirements-live.lock
       - run: python -m pip install --no-deps --no-build-isolation -e .
       - run: python -m pip check
       - run: python -m pytest -q
       - run: python -m timex.cli --csv examples/demo_events.csv --format json --output outputs/ci-result.json
       - run: python -m timex.cli --baseline --output outputs/baseline.json
+      - run: python -m timex.cli --compare --format json --output outputs/comparison.json

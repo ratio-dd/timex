@@ -1,0 +1,106 @@
+name: DeepSeek M1 smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Check configuration only, or run one paid model comparison
+        type: choice
+        options:
+          - check
+          - live
+        default: check
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: timex-live-smoke
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    # Run reviewed code from the default branch only.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: test-env
+    env:
+      LANGSMITH_TRACING: 'false'
+      LANGCHAIN_TRACING_V2: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install locked dependencies
+        run: |
+          python -m pip install -r requirements-live.lock
+          python -m pip install --no-deps --no-build-isolation -e .
+          python -m pip check
+      - name: Check configuration and optionally run one synthetic comparison
+        env:
+          # The DeepSeek credential is exposed only to this step, through env.
+          OPENAI_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          RUN_MODE: ${{ inputs.mode }}
+          MODEL_PROVIDER: openai
+          MODEL_NAME: deepseek-flash
+          OPENAI_BASE_URL: https://api.deepseek.com
+          MODEL_THINKING: disabled
+          # Public prices, verified 2026-10-12: peak/cache-miss USD per million.
+          # https://api-docs.deepseek.com/quick_start/pricing/
+          # Optional GitHub Variables override these explicit workflow defaults.
+          MODEL_INPUT_USD_PER_MILLION: ${{ vars.MODEL_INPUT_USD_PER_MILLION || '0.30' }}
+          MODEL_OUTPUT_USD_PER_MILLION: ${{ vars.MODEL_OUTPUT_USD_PER_MILLION || '1.20' }}
+          MAX_MODEL_CALLS: '10'
+          MAX_RETRIES: '1'
+          MAX_OUTPUT_TOKENS: '1600'
+          MAX_ESTIMATED_USD_PER_RUN: '0.25'
+          CALL_TIMEOUT_SECONDS: '60'
+          TOTAL_TIMEOUT_SECONDS: '300'
+        run: |
+          python - <<'PY'
+          import os
+          if not os.environ.get('OPENAI_API_KEY'):
+              raise SystemExit('Configure DEEPSEEK_API_KEY in the test-env Environment.')
+          from timex.config import ModelSettings
+          try:
+              ModelSettings.from_env().authorize(live=True)
+          except ValueError:
+              raise SystemExit('Configure both MODEL_INPUT_USD_PER_MILLION and MODEL_OUTPUT_USD_PER_MILLION as finite nonnegative prices.') from None
+          if os.environ.get('RUN_MODE') not in ('check', 'live'):
+              raise SystemExit('Choose check or live mode.')
+          print('Secret is present; model and price configuration passed validation.')
+          PY
+          if [ "$RUN_MODE" = "live" ]; then
+            python -m timex.cli --live --compare \
+              --request examples/demo_request.json \
+              --format json --output outputs/m1-live-comparison.json
+          else
+            echo 'Check mode: no model requests were made. Key validity has not been tested.'
+          fi
+      - name: Render the saved report
+        if: ${{ !cancelled() && hashFiles('outputs/m1-live-comparison.json') != '' }}
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          from timex.cli import comparison_markdown
+          report = json.loads(Path('outputs/m1-live-comparison.json').read_text(encoding='utf-8'))
+          with Path('outputs/m1-live-comparison.md').open('x', encoding='utf-8') as destination:
+              destination.write(comparison_markdown(report))
+          PY
+      - name: Save complete or partial results
+        if: ${{ !cancelled() && hashFiles('outputs/m1-live-comparison.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1-deepseek-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            outputs/m1-live-comparison.json
+            outputs/m1-live-comparison.md
+          retention-days: 7
+          if-no-files-found: error
