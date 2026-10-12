@@ -1,0 +1,35 @@
+name: aTimeLogger read-only check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: timex-atimelogger-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: test-env
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install locked author CLI without lifecycle scripts
+        run: npm ci --prefix tools/atimelogger --ignore-scripts --no-audit --no-fund
+      - name: Check authentication and read a seven-day aggregate
+        env:
+          ATL_TOKEN: ${{ secrets.ATIMELOGGER_ACCESS_TOKEN }}
+          ATL_BASE_URL: https://app.atimelogger.pro
+        run: python scripts/check_atimelogger.py

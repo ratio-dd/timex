@@ -1,0 +1,7 @@
+{
+  "name": "timex-atimelogger-check",
+  "private": true,
+  "dependencies": {
+    "atimelogger-mcp": "0.2.0"
+  }
+}
