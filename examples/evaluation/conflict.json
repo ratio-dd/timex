@@ -1,0 +1,33 @@
+{
+  "question": "【合成冲突型情境】本周想额外花180分钟开发一个Agent实验，但周三晚只有60分钟可自主安排，其余时段已有工作、出行或固定活动。应该投入多少，如何取舍？",
+  "time_window_days": 7,
+  "requested_minutes": 180,
+  "constraints": [
+    "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+    "周五出行、周六固定活动，不挪用这些安排。",
+    "不挤占睡眠和必要工作。"
+  ],
+  "time_summary": {
+    "period_start": "2026-10-05",
+    "period_end": "2026-10-11",
+    "timezone": "Asia/Shanghai",
+    "category_minutes": {
+      "work": 3000.0,
+      "learning": 240.0,
+      "leisure": 600.0,
+      "sleep": 3360.0,
+      "exercise": 180.0,
+      "social": 600.0,
+      "other": 1000.0,
+      "untracked": 1100.0
+    },
+    "tracked_minutes": 8980.0,
+    "untracked_minutes": 1100.0,
+    "coverage": 0.8908730158730159,
+    "notes": [
+      "完全合成的测试情境和记录，不代表真实用户的日程、睡眠或精力。",
+      "分类为零不代表行为不存在；未记录不等于空闲。"
+    ]
+  },
+  "available_minutes": 60
+}

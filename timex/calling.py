@@ -40,12 +40,41 @@ revise：读取 round1，至少回应另一角色，cited_position 必须逐字�
 synthesis：中立整理 round2；时长不同或有任何 remaining_objections 时必须呈现 unresolved_conflicts。
 时长相同不等于全体共识；不得把未解决异议描述为一致赞成。方案条件必须原样包含所有 request.constraints。
 baseline：一个助手同时考虑事业、探索、生活、健康四项利益，独立提出方案，不模拟其他 Agent 对话。
+synthesis 和 baseline 的 proposed_plan 必须填写 maximum_minutes 和 adjustment_conditions。
+suggested_minutes 是当前默认建议，文字建议默认暂缓时必须为0；maximum_minutes 是条件满足后的总上限。
+0 <= suggested_minutes <= maximum_minutes <= request.requested_minutes；上限高于默认时必须明确增加投入的触发条件。
+request.available_minutes 若非null，是所有角色建议及方案条件上限的硬上限；不得假设约束将来变更而突破它。
+条件未确认时不预支未来精力或空闲；正文与两个数值一致，保留角色分歧，不能用上限冒充默认建议。
 建议永远不自动执行，最终由用户决定。每个文本字段尽量简短，每个列表只保留必要条目。
 """
     if repair:
         instruction += "上次输出未通过契约校验，以下是安全的错误码与字段位置。针对这些错误修正并重新生成完整 JSON：\n"
         instruction += json.dumps([issue.model_dump() for issue in repair], ensure_ascii=False) + "\n"
     contract = schema.model_json_schema()
+    request = payload["request"]
+    ceiling = request["requested_minutes"]
+    if request.get("available_minutes") is not None:
+        ceiling = min(ceiling, request["available_minutes"])
+    if "suggested_minutes" in contract["properties"]:
+        contract["properties"]["suggested_minutes"]["maximum"] = ceiling
+    if payload["stage"] in {"synthesis", "baseline"}:
+        plan_schema = contract["$defs"]["Plan"]
+        # Enforce current-generation fields in the prompt schema, while the
+        # storage model can still read legacy reports without fabricating them.
+        plan_schema["required"] = list(plan_schema["properties"])
+        for key in ("maximum_minutes", "adjustment_conditions"):
+            prop = plan_schema["properties"][key]
+            branch = next(item for item in prop.pop("anyOf") if item.get("type") != "null")
+            prop.pop("default", None)
+            prop.update(branch)
+        for key in ("suggested_minutes", "maximum_minutes"):
+            plan_schema["properties"][key]["maximum"] = ceiling
+        constraints = payload["request"]["constraints"]
+        if constraints:
+            plan_schema["properties"]["conditions"]["allOf"] = [
+                {"contains": {"const": constraint}} for constraint in constraints]
+        instruction += "方案 conditions 必须逐字保留以下每一项，可追加条件，不可改写或合并：\n"
+        instruction += json.dumps(constraints, ensure_ascii=False) + "\n"
     if "evidence_refs" in contract["properties"]:
         contract["properties"]["evidence_refs"]["items"]["enum"] = evidence_paths(payload["request"])
     instruction += json.dumps(contract, ensure_ascii=False)

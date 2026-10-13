@@ -1,0 +1,32 @@
+{
+  "question": "【合成恢复型情境】过去一周工作较多，情境中的本人报告下班后精力仅3/10。原计划未来7天额外学习120分钟，现在应保持、缩减还是暂缓？所有主观状态均为合成设定。",
+  "time_window_days": 7,
+  "requested_minutes": 120,
+  "constraints": [
+    "未来两天不新增晚间学习，优先休息。",
+    "不挤占睡眠、运动和必要工作。",
+    "后续是否恢复学习需要根据当天实际精力决定，不把过去记录当作已确定的未来状态。"
+  ],
+  "time_summary": {
+    "period_start": "2026-10-05",
+    "period_end": "2026-10-11",
+    "timezone": "Asia/Shanghai",
+    "category_minutes": {
+      "work": 3600.0,
+      "learning": 420.0,
+      "leisure": 840.0,
+      "sleep": 2520.0,
+      "exercise": 60.0,
+      "social": 120.0,
+      "other": 1680.0,
+      "untracked": 840.0
+    },
+    "tracked_minutes": 9240.0,
+    "untracked_minutes": 840.0,
+    "coverage": 0.9166666666666666,
+    "notes": [
+      "完全合成的测试情境和记录，不代表真实用户的日程、睡眠或精力。",
+      "分类为零不代表行为不存在；未记录不等于空闲。"
+    ]
+  }
+}

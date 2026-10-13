@@ -1,0 +1,302 @@
+{
+  "description": "完全合成输入的实测摘要；包含失败与中间缺陷，不是自动质量评分。v2-capped 是最终契约验证。",
+  "model": "deepseek-flash",
+  "thinking": "disabled",
+  "configured_prices_usd_per_million": {
+    "input": 0.3,
+    "output": 1.2
+  },
+  "runs": [
+    {
+      "iteration": "v2",
+      "case": "conflict",
+      "execution_id": "e2e5a9df-24d5-4d21-98d4-36ca4b227095",
+      "created_at": "2026-10-13T01:40:13.441130+00:00",
+      "status": "partial",
+      "total_usage": {
+        "model_calls": 11,
+        "input_tokens": 21243,
+        "output_tokens": 4372,
+        "estimated_usd": 0.011619299999999999,
+        "budget_estimated_usd": 0.011619299999999999,
+        "elapsed_seconds": 40.9221
+      },
+      "council": {
+        "status": "complete",
+        "plan": {
+          "text": "中立整理：round2 中 career 与 life 支持默认60分钟，curiosity 与 health 支持默认0分钟但接受60分钟为条件上限。为不夸大共识，综合建议默认暂缓为0分钟，仅在确认周三晚精力正常且不影响睡眠、必要工作、周五出行与周六固定活动后，方可启用周三晚60分钟，总上限不超过60分钟；不预支未记录时间。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 60,
+          "adjustment_conditions": [
+            "用户在周三当天确认精力正常，且开发不挤占睡眠与必要工作。",
+            "用户确认实验范围已缩小为可在60分钟内完成的最小版本。",
+            "用户逐次确认且不自动执行。"
+          ],
+          "conditions": [
+            "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+            "周五出行、周六固定活动，不挪用这些安排。",
+            "不挤占睡眠和必要工作。"
+          ]
+        },
+        "attempt_errors": []
+      },
+      "single": {
+        "status": "partial",
+        "plan": null,
+        "attempt_errors": [
+          {
+            "stage": "baseline",
+            "role": "coordinator",
+            "issues": [
+              {
+                "code": "constraints_omitted",
+                "path": "proposed_plan.conditions"
+              }
+            ]
+          },
+          {
+            "stage": "baseline",
+            "role": "coordinator",
+            "issues": [
+              {
+                "code": "constraints_omitted",
+                "path": "proposed_plan.conditions"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "iteration": "v2-final",
+      "case": "conflict",
+      "execution_id": "16e69b5e-8ad7-4181-b999-a69dd0d805ed",
+      "created_at": "2026-10-13T01:41:45.712127+00:00",
+      "status": "complete",
+      "total_usage": {
+        "model_calls": 11,
+        "input_tokens": 22076,
+        "output_tokens": 4620,
+        "estimated_usd": 0.0121668,
+        "budget_estimated_usd": 0.0121668,
+        "elapsed_seconds": 39.6744
+      },
+      "council": {
+        "status": "complete",
+        "plan": {
+          "text": "默认仅周三晚60分钟做缩小范围的最小Agent实验；其余120分钟本周暂缓。若条件满足，可把已确认的自主时间总上限提高到180分钟，但不得使用未记录时间、不得挤占睡眠和必要工作、不得挪用周五出行和周六固定活动；最终由用户决定。",
+          "suggested_minutes": 60,
+          "maximum_minutes": 180,
+          "adjustment_conditions": [
+            "出现已确认且不挤占睡眠、必要工作、周五出行、周六固定活动的额外自主时间窗口。",
+            "周三晚及额外窗口精力与专注状态充足，用户本人确认可继续。",
+            "实验仍未超出预先定义的最小验证范围。"
+          ],
+          "conditions": [
+            "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+            "周五出行、周六固定活动，不挪用这些安排。",
+            "不挤占睡眠和必要工作。"
+          ]
+        },
+        "attempt_errors": [
+          {
+            "stage": "revise",
+            "role": "career",
+            "issues": [
+              {
+                "code": "extra_forbidden",
+                "path": "<unknown>"
+              }
+            ]
+          }
+        ]
+      },
+      "single": {
+        "status": "complete",
+        "plan": {
+          "text": "默认仅用周三晚60分钟做最小可行实验：先定一个可验证问题，跑通骨架或记录思路；不预设额外时段。若之后出现新的、已确认且不影响工作睡眠的空闲，再考虑追加。",
+          "suggested_minutes": 60,
+          "maximum_minutes": 180,
+          "adjustment_conditions": [
+            "周三60分钟结束后仍有确认空闲，且不影响睡眠和必要工作。",
+            "出现本周内新确认的自主时段，而非历史未记录时间。",
+            "用户明确同意追加投入。"
+          ],
+          "conditions": [
+            "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+            "周五出行、周六固定活动，不挪用这些安排。",
+            "不挤占睡眠和必要工作。"
+          ]
+        },
+        "attempt_errors": []
+      }
+    },
+    {
+      "iteration": "v2-final",
+      "case": "recovery",
+      "execution_id": "c34bb8d3-eb41-45a2-aa4f-f48291befb4f",
+      "created_at": "2026-10-13T01:42:17.717871+00:00",
+      "status": "complete",
+      "total_usage": {
+        "model_calls": 10,
+        "input_tokens": 18464,
+        "output_tokens": 3804,
+        "estimated_usd": 0.010103999999999998,
+        "budget_estimated_usd": 0.010103999999999998,
+        "elapsed_seconds": 32.0048
+      },
+      "council": {
+        "status": "complete",
+        "plan": {
+          "text": "未来7天默认暂缓额外学习120分钟，建议投入0分钟；未来两天不新增晚间学习，优先休息。两天后若当天自评精力恢复，且不挤占睡眠、运动和必要工作，可逐次小步恢复，每次20-30分钟，总投入不超过120分钟。未确认当天精力前不预支。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 120,
+          "adjustment_conditions": [
+            "未来两天休息后，当天自评精力恢复且不挤占睡眠、运动和必要工作。",
+            "每次恢复从20-30分钟开始，逐次评估，总时长不超过120分钟。",
+            "未记录时间不得视为空闲，不从中挤占学习时间。"
+          ],
+          "conditions": [
+            "未来两天不新增晚间学习，优先休息。",
+            "不挤占睡眠、运动和必要工作。",
+            "后续是否恢复学习需要根据当天实际精力决定，不把过去记录当作已确定的未来状态。",
+            "恢复前需确认当天精力阈值，若未确认则继续暂缓。",
+            "小步恢复不占用娱乐、关系或自由时间。"
+          ]
+        },
+        "attempt_errors": []
+      },
+      "single": {
+        "status": "complete",
+        "plan": {
+          "text": "默认暂缓未来7天新增学习：未来两天不安排晚间学习；之后若当天自评精力明显回升且不挤占其他需要，再考虑少量恢复。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 60,
+          "adjustment_conditions": [
+            "第三天起若当天自评精力≥6/10且睡眠、运动、必要工作均未被挤占，可当天安排不超过30分钟学习。",
+            "若精力持续偏低或睡眠不足，继续保持0分钟。"
+          ],
+          "conditions": [
+            "未来两天不新增晚间学习，优先休息。",
+            "不挤占睡眠、运动和必要工作。",
+            "后续是否恢复学习需要根据当天实际精力决定，不把过去记录当作已确定的未来状态。"
+          ]
+        },
+        "attempt_errors": []
+      }
+    },
+    {
+      "iteration": "v2-capped",
+      "case": "conflict",
+      "execution_id": "2488a5be-0b00-4b15-90fd-a3278845f257",
+      "created_at": "2026-10-13T01:43:40.198441+00:00",
+      "status": "complete",
+      "total_usage": {
+        "model_calls": 10,
+        "input_tokens": 20001,
+        "output_tokens": 3929,
+        "estimated_usd": 0.010715099999999998,
+        "budget_estimated_usd": 0.010715099999999998,
+        "elapsed_seconds": 34.1946
+      },
+      "council": {
+        "status": "complete",
+        "plan": {
+          "text": "中立整理：周三晚60分钟是唯一可自主窗口；默认建议暂缓为0，由用户先确认当晚原本用途与精力，若确认让渡并可形成可保存的最小产出，则上限60分钟、硬性结束，若疲劳或影响睡眠则维持暂缓。不自动执行。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 60,
+          "adjustment_conditions": [
+            "用户确认周三晚原定生活、放松或关系安排可让渡，且当晚精力状态允许。",
+            "实验已缩小为60分钟内可完成并可保存的最小产出。",
+            "设硬性结束点，且不影响睡眠与必要工作。"
+          ],
+          "conditions": [
+            "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+            "周五出行、周六固定活动，不挪用这些安排。",
+            "不挤占睡眠和必要工作。"
+          ]
+        },
+        "attempt_errors": []
+      },
+      "single": {
+        "status": "complete",
+        "plan": {
+          "text": "默认仅用周三晚60分钟做缩小版Agent实验，其余零投入；不把未记录时间当空闲。",
+          "suggested_minutes": 60,
+          "maximum_minutes": 60,
+          "adjustment_conditions": [],
+          "conditions": [
+            "本周仅周三晚60分钟可自主安排，不能把历史未记录时间当作额外空闲。",
+            "周五出行、周六固定活动，不挪用这些安排。",
+            "不挤占睡眠和必要工作。"
+          ]
+        },
+        "attempt_errors": []
+      }
+    },
+    {
+      "iteration": "v2-capped",
+      "case": "recovery",
+      "execution_id": "e887e00a-74b6-49b5-a6d8-9ef3ac8e75ba",
+      "created_at": "2026-10-13T01:44:16.072908+00:00",
+      "status": "complete",
+      "total_usage": {
+        "model_calls": 11,
+        "input_tokens": 20892,
+        "output_tokens": 4238,
+        "estimated_usd": 0.0113532,
+        "budget_estimated_usd": 0.0113532,
+        "elapsed_seconds": 35.8734
+      },
+      "council": {
+        "status": "complete",
+        "plan": {
+          "text": "默认暂缓新增晚间学习，未来两天优先休息；两天后仅按当天实际精力逐日决定是否少量恢复，总上限不超过原计划120分钟，且不挤占睡眠、运动和必要工作。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 120,
+          "adjustment_conditions": [
+            "两天后当天实际精力明显恢复，足以完成必要工作且不挤占睡眠、运动。",
+            "当天无新增晚间学习，且用户确认愿意投入少量固定短时段学习。",
+            "恢复采用逐日小步方式，不补回原120分钟，出现精力下降即退回0分钟。"
+          ],
+          "conditions": [
+            "未来两天不新增晚间学习，优先休息。",
+            "不挤占睡眠、运动和必要工作。",
+            "后续是否恢复学习需要根据当天实际精力决定，不把过去记录当作已确定的未来状态。"
+          ]
+        },
+        "attempt_errors": [
+          {
+            "stage": "initial",
+            "role": "life",
+            "issues": [
+              {
+                "code": "extra_forbidden",
+                "path": "<unknown>"
+              }
+            ]
+          }
+        ]
+      },
+      "single": {
+        "status": "complete",
+        "plan": {
+          "text": "建议未来7天默认暂缓新增120分钟学习；先按约束休息，若当天精力恢复且不挤占睡眠、运动、工作，再小幅增加，总上限仍为120分钟。",
+          "suggested_minutes": 0,
+          "maximum_minutes": 120,
+          "adjustment_conditions": [
+            "某天实际精力恢复到可承受额外晚间学习，且不挤占睡眠、运动和必要工作。",
+            "先与用户确认当天状态，再决定是否从0增加到短暂学习，不预支未来精力。"
+          ],
+          "conditions": [
+            "未来两天不新增晚间学习，优先休息。",
+            "不挤占睡眠、运动和必要工作。",
+            "后续是否恢复学习需要根据当天实际精力决定，不把过去记录当作已确定的未来状态。"
+          ]
+        },
+        "attempt_errors": []
+      }
+    }
+  ],
+  "manual_scores": null
+}

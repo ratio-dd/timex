@@ -19,7 +19,7 @@ def initial(payload: dict[str, Any]) -> dict[str, Any]:
     sleep = facts.category_minutes.get("sleep", 0)
     low_sleep = sleep > 0 and facts.coverage >= 0.5 and sleep / days < 420
     high_work = facts.category_minutes.get("work", 0) / days > 480
-    requested = request.requested_minutes
+    requested = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
     no_career_gain = any(word in request.question for word in ("无职业收益", "无明显职业收益", "非功利"))
     if role == "career":
         amount = 0 if no_career_gain else min(requested, 60 if high_work else requested)
@@ -86,7 +86,7 @@ def synthesize(payload: dict[str, Any]) -> dict[str, Any]:
     text = (f"各方修订后的时长一致：可考虑 {amount} 分钟，用户可拒绝。" if unanimous else
             f"未达成一致。保守候选是新增 {amount} 分钟；其他时长及健康顾虑待用户裁决。")
     return {"shared_ground": ["保留用户约束，建议不自动执行，用户可拒绝。"],
-            "proposed_plan": {"text": text, "suggested_minutes": amount,
+            "proposed_plan": {"text": text, "suggested_minutes": amount, "maximum_minutes": amount, "adjustment_conditions": [],
                               "conditions": [*request.constraints, "不压缩睡眠；用户确认实际精力及空闲。"]},
             "unresolved_conflicts": conflict, "requires_user_decision": True,
             "evidence_limitations": [*request.time_summary.notes,
@@ -111,7 +111,7 @@ def baseline(payload: dict[str, Any]) -> dict[str, Any]:
     amount = min(position["suggested_minutes"] for position in positions.values())
     return {"considerations": {role: position["reasons"][0] for role, position in positions.items()},
             "proposed_plan": {"text": f"单助手综合四项利益，候选投入 {amount} 分钟；用户可拒绝。",
-                              "suggested_minutes": amount, "conditions": payload["request"]["constraints"]},
+                              "suggested_minutes": amount, "maximum_minutes": amount, "adjustment_conditions": [], "conditions": payload["request"]["constraints"]},
             "tradeoffs": ["各利益的时间建议可能不同，较少投入会牺牲探索机会。"],
             "evidence_refs": ["question", "constraints", "time_summary"],
             "unknowns": ["fake 演示规则；无法据此评价真实模型质量。"], "requires_user_decision": True}

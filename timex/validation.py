@@ -5,10 +5,13 @@ from .models import ValidationIssue
 
 
 SEMANTIC_ERRORS = {
+    "plan missing time semantics": ("time_semantics_required", "proposed_plan"),
+    "plan ceiling below default": ("ceiling_below_default", "proposed_plan.maximum_minutes"),
+    "plan missing adjustment trigger": ("adjustment_trigger_required", "proposed_plan.adjustment_conditions"),
     "evidence references are required": ("evidence_required", "evidence_refs"),
     "unknown evidence reference": ("unknown_evidence_reference", "evidence_refs"),
     "proposal exceeds requested investment": ("investment_exceeded", "suggested_minutes"),
-    "plan exceeds requested investment": ("investment_exceeded", "proposed_plan.suggested_minutes"),
+    "plan exceeds requested investment": ("investment_exceeded", "proposed_plan"),
     "plan omitted user constraints": ("constraints_omitted", "proposed_plan.conditions"),
     "untraceable peer response": ("peer_quote_mismatch", "responses_to_others"),
     "revision requires explanation": ("explanation_required", "change_explanation"),
