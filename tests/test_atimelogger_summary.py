@@ -74,6 +74,24 @@ def test_hierarchy_rename_new_category_and_leaf_override():
     assert audit[0]["orphaned_parent"] is True
 
 
+def test_deleted_categories_still_classify_history():
+    types = [dict(id="g", name="Old group", group=True, deleted=True),
+             dict(id="work", name="Old leaf", parentId="g", deleted=True),
+             dict(id="sleep", name="Archived leaf", archived=True)]
+    mapping, audit = type_mapping(types, {"id:g": "work", "id:work": "learning",
+                                        "id:sleep": "sleep"})
+    assert mapping == {"work": "learning", "sleep": "sleep"}
+    assert audit[0]["deleted"] is True
+    assert audit[1]["archived"] is True
+    item = interval("1", "2026-10-05T01:00:00+08:00", "2026-10-05T02:00:00+08:00")
+    summary, diagnostics = aggregate_intervals([item], period_start=date(2026, 10, 5),
+        period_end=date(2026, 10, 11), timezone_name="Asia/Shanghai", mapping=mapping)
+    assert summary.category_minutes["learning"] == 60
+    assert diagnostics["unknown_type_intervals"] == 0
+    inherited, _ = type_mapping(types, {"id:g": "work"})
+    assert inherited["work"] == "work"
+
+
 def test_collect_requires_timezone_and_checks_paging(monkeypatch):
     import timex.atimelogger as adapter
     monkeypatch.setattr(adapter, "read_api", lambda *a: {})
@@ -91,10 +109,13 @@ def test_collect_requires_timezone_and_checks_paging(monkeypatch):
         if path == "/api/activities": return {"activities": []}
         raise AssertionError(path)
     monkeypatch.setattr(adapter, "read_api", fake)
-    result = collect_summary(mapping={}, period_end=date(2026, 10, 11))
+    result = collect_summary(mapping={}, period_end=date(2020, 10, 11))
     assert result["time_summary"]["untracked_minutes"] == 10080
     assert result["provenance"]["model_calls"] == 0
     assert len([p for p in calls if p.startswith("/api/intervals")]) == 2
+    notes = " ".join(result["time_summary"]["notes"])
+    assert "2020-10-05 至 2020-10-11" in notes
+    assert "最近" not in notes
 
 
 def test_read_error_redacts_credentials_and_private_response(monkeypatch):
@@ -109,3 +130,31 @@ def test_read_error_redacts_credentials_and_private_response(monkeypatch):
     assert error.value.__suppress_context__
     with pytest.raises(ValueError, match="unsupported"):
         adapter.read_api("/api/delete")
+
+
+def test_history_reads_carry_in_but_statistics_and_summary_keep_requested_window(monkeypatch):
+    import timex.atimelogger as adapter
+    # Starting before the requested first day: the history endpoint otherwise
+    # omits this record, even though statistics includes its carry-in time.
+    item = interval("carry", "2020-10-04T23:00:00+08:00", "2020-10-05T02:00:00+08:00")
+    def fake(path, payload=None):
+        if path == "/api/users/me": return {"timeZone": "Asia/Shanghai"}
+        if path == "/api/types": return [dict(id="work", name="Work")]
+        if path.startswith("/api/intervals"):
+            assert payload == {"from": "2020-10-04", "to": "2020-10-11", "timezone": "Asia/Shanghai"}
+            return {"number": 0, "content": [{"intervals": [item]}], "last": True}
+        if path == "/api/statistics":
+            assert payload["from"] == "2020-10-05"
+            assert payload["to"] == "2020-10-11"
+            return {"total": {"info": {"total": 7200}}}
+        if path == "/api/activities": return {"activities": []}
+        raise AssertionError(path)
+    monkeypatch.setattr(adapter, "read_api", fake)
+    result = collect_summary(mapping={"id:work": "work"}, period_end=date(2020, 10, 11))
+    assert result["time_summary"]["period_start"] == "2020-10-05"
+    assert result["time_summary"]["category_minutes"]["work"] == 120
+    assert result["diagnostics"]["api_minus_union_seconds"] == 0
+    assert result["diagnostics"]["carry_in_lookback_days"] == 1
+    for value in (0, 94, True, 1.5):
+        with pytest.raises(ValueError, match="lookback_days"):
+            collect_summary(mapping={}, lookback_days=value)

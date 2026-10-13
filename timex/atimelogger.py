@@ -49,7 +49,9 @@ def type_mapping(types: list[dict], mapping: dict[str, str]):
         raise ValueError("duplicate type identifiers")
     resolved, audit = {}, []
     for t in types:
-        if t.get("deleted") or t.get("group"):
+        # Deleted leaves can still classify historical intervals, including
+        # explicit stable-ID rules. Groups supply inheritance but never time.
+        if t.get("group"):
             continue
         ancestors, ids, seen, node, orphaned = [], [], set(), t, False
         while node:
@@ -73,7 +75,8 @@ def type_mapping(types: list[dict], mapping: dict[str, str]):
         resolved[t["id"]] = category
         audit.append({"path": paths[-1], "category": category,
                       "mapping_source": "stable_id" if source and source.startswith("id:") else source,
-                      "defaulted": source is None, "orphaned_parent": orphaned})
+                      "defaulted": source is None, "orphaned_parent": orphaned,
+                      "deleted": bool(t.get("deleted")), "archived": bool(t.get("archived"))})
     return resolved, audit
 
 
@@ -167,8 +170,10 @@ def aggregate_intervals(intervals: list[dict], *, period_start: date, period_end
 
 
 def collect_summary(*, mapping: dict[str, str], timezone_fallback: str | None = None,
-                    period_end: date | None = None):
+                    period_end: date | None = None, lookback_days: int = 1):
     """Last seven completed local days, bounded pagination, no stored raw records."""
+    if type(lookback_days) is not int or not 1 <= lookback_days <= 93:
+        raise ValueError("lookback_days must be an integer from 1 to 93")
     profile = read_api("/api/users/me")
     tz = profile.get("timeZone") or timezone_fallback
     if not tz:
@@ -181,9 +186,12 @@ def collect_summary(*, mapping: dict[str, str], timezone_fallback: str | None = 
     first = last - timedelta(days=6)
     resolved, audit = type_mapping(read_api("/api/types"), mapping)
     args = {"from": str(first), "to": str(last), "timezone": tz}
+    # History selects records by their starting day, whereas statistics includes
+    # carry-in time. Read preceding days too, then clip to the requested window.
+    history_args = dict(args, **{"from": str(first - timedelta(days=lookback_days))})
     intervals = []
     for page in range(10):
-        data = read_api(f"/api/intervals?page={page}&size=20", args)
+        data = read_api(f"/api/intervals?page={page}&size=20", history_args)
         if data.get("number") != page or not isinstance(data.get("content"), list):
             raise ValueError("unexpected history page")
         for day in data["content"]:
@@ -205,11 +213,15 @@ def collect_summary(*, mapping: dict[str, str], timezone_fallback: str | None = 
     diagnostics["api_statistic_seconds"] = api_seconds
     diagnostics["api_minus_raw_interval_seconds"] = api_seconds - diagnostics["raw_clipped_interval_seconds"]
     diagnostics["api_minus_union_seconds"] = api_seconds - summary.tracked_minutes * 60
+    diagnostics["history_query_start"] = history_args["from"]
+    diagnostics["history_query_end"] = history_args["to"]
+    diagnostics["carry_in_lookback_days"] = lookback_days
     activities = read_api("/api/activities")
     diagnostics["active_or_paused_activity_count"] = sum(
         a.get("status") in {"RUNNING", "PAUSED"} for a in activities.get("activities", []))
     source = "account" if profile.get("timeZone") else "explicit fallback"
-    summary.notes.append(f"时区来源：{source} ({tz})；最近 7 个完整本地日，不包含今天。")
+    summary.notes.append(f"时区来源：{source} ({tz})；统计 {first} 至 {last} 的 7 个完整本地日。")
+    summary.notes.append(f"历史查询向前扩展 {lookback_days} 天以补全跨日记录，再裁剪到统计窗口；更早开始的超长区间可能遗漏。")
     if any(x["orphaned_parent"] for x in audit):
         summary.notes.append("类别树有缺失父组；这些类别仅采用明确的类别规则，否则归入 other，不猜测父组。")
     if abs(diagnostics["api_minus_union_seconds"]) <= 1:
