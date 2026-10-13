@@ -23,7 +23,7 @@ def run_comparison(request, *, model=None, limits=None, provider=None, settings=
     def total(key):
         return sum(u[key] for u in usages) if all(u[key] is not None for u in usages) else None
 
-    return {"execution_id": str(uuid4()), "created_at": datetime.now(timezone.utc).isoformat(),
+    return {"report_version": 2, "execution_id": str(uuid4()), "created_at": datetime.now(timezone.utc).isoformat(),
             "mode": "live" if live else "fake", "request": request.model_dump(mode="json"),
             "model_settings": vars(settings),
             "limits_per_run": vars(limits), "council": council.model_dump(mode="json"), "single": single,

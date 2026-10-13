@@ -6,8 +6,18 @@ from pathlib import Path
 from .graph import Limits, run_council, run_single
 from .config import ModelSettings
 from .comparison import run_comparison
-from .models import CouncilResult, DeliberationRequest
+from .models import CouncilResult, DeliberationRequest, Plan
 from .time_data import load_summary
+
+
+def plan_lines(plan):
+    if plan.maximum_minutes is None or plan.adjustment_conditions is None:
+        return [plan.text, "", f"- 历史 suggested_minutes：{plan.suggested_minutes} 分钟（默认建议与上限未区分）",
+                *[f"- 条件：{v}" for v in plan.conditions]]
+    return [plan.text, "", f"- 默认建议：{plan.suggested_minutes} 分钟",
+            f"- 条件满足后的总上限：{plan.maximum_minutes} 分钟",
+            *[f"- 增加投入的条件：{v}" for v in plan.adjustment_conditions],
+            *[f"- 条件：{v}" for v in plan.conditions]]
 
 
 def markdown(result: CouncilResult) -> str:
@@ -32,7 +42,7 @@ def markdown(result: CouncilResult) -> str:
                           *[f"- 保留异议：{v}" for v in position.remaining_objections]]
     lines += ["", "## 综合", "", *[f"- 共同点：{v}" for v in result.shared_ground]]
     if result.proposed_plan:
-        lines += [result.proposed_plan.text, "", *[f"- 条件：{v}" for v in result.proposed_plan.conditions]]
+        lines += plan_lines(result.proposed_plan)
     lines += [*[f"- 分歧：{v}" for v in result.unresolved_conflicts], "- 最终决定由用户作出。", "",
               *[f"- 限制：{v}" for v in result.evidence_limitations], "", "## 执行状态", "",
               f"- 状态：{result.status}", f"- Provider / 模型：{result.usage.provider} / {result.usage.model or 'local-rules'}",
@@ -54,6 +64,8 @@ def comparison_markdown(report):
              markdown(CouncilResult.model_validate(report["council"])), "## 单助手建议", ""]
     single = report["single"]
     if single:
+        if single.get("advice"):
+            lines += plan_lines(Plan.model_validate(single["advice"]["proposed_plan"])) + [""]
         lines += ["```json", json.dumps(single, ensure_ascii=False, indent=2), "```"]
     else:
         lines += ["议会未完成，已跳过对照调用。"]

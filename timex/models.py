@@ -68,6 +68,8 @@ class DeliberationRequest(Contract):
     question: str = Field(min_length=1, max_length=2000)
     time_window_days: Literal[7, 30] = 7
     requested_minutes: int = Field(default=180, ge=0, le=1440)
+    available_minutes: int | None = Field(default=None, ge=0, le=1440,
+                                          description="已确认的本窗口可投入硬上限；未知时不填，不从历史记录推断")
     constraints: list[str] = Field(default_factory=list, max_length=20)
     time_summary: TimeSummary
 
@@ -108,7 +110,12 @@ class RevisedPosition(Contract):
 
 class Plan(Contract):
     text: str
-    suggested_minutes: int = Field(ge=0, le=1440)
+    suggested_minutes: int = Field(ge=0, le=1440, description="默认建议投入；默认暂缓时为0，不填条件上限")
+    # None preserves historical artifacts without inventing missing semantics.
+    maximum_minutes: int | None = Field(default=None, ge=0, le=1440,
+                                        description="条件满足时的总投入上限，至少等于默认建议")
+    adjustment_conditions: list[str] | None = Field(default=None,
+                                                   description="从默认建议增加投入的明确触发条件；无增加则为空列表")
     conditions: list[str]
 
 

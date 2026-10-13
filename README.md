@@ -2,7 +2,7 @@
 
 让四个 Agent 分别从事业、探索、生活、健康的角度讨论个人时间安排。它们先独立提出建议，再回应彼此意见，最后由协调器整理方案、让步和分歧，交给用户决定。
 
-当前已实现两轮 LangGraph 协商、CSV / aTimeLogger 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 已完成合成输入的真实模型对照；aTimeLogger 真实摘要已在云环境完成只读验证。用户授权后的真实数据模型对照也已完成，人工质量评价仍待完成。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
+当前已实现两轮 LangGraph 协商、CSV / aTimeLogger 时间摘要、离线演示、OpenAI 兼容模型接入，以及同议题的单助手对照。M1 工程验收已完成，包含合成冲突/恢复情境的真实模型对照；aTimeLogger 真实摘要已在云环境完成只读验证。用户授权后的真实数据模型对照也已完成，人工质量评价仍待完成。完整计划见 [docs/POC.md](docs/POC.md)，M1 配置与验收见 [docs/M1.md](docs/M1.md)。
 
 ## 安装与运行
 
@@ -55,9 +55,11 @@ python -m timex.cli --live --compare --format json --output outputs/live-compari
 
 每次调用都有输入估算、输出 Token 上限、字符限制与超时。SDK 自动重试已关闭。供应商返回的 Token 用于调用后计量；缺失计量时报告 `null`，预算继续保留保守估算。配置项及估算边界见 [docs/M1.md](docs/M1.md)。
 
+新计划分别显示默认建议、条件满足后的总上限和增加投入的触发条件；契约要求默认暂缓用0分钟表示，正文一致性仍需人工审阅。历史报告明确保留旧字段语义，详见 [计划契约](docs/M1.md#计划时长契约-v2)。
+
 ## 时间数据
 
-`--request` 指定议题 JSON，`--csv` 用内部标准 CSV 替换其中的时间摘要。请求明确指定 7/30 天范围；`requested_minutes` 默认 180 分钟，其他议题可显式修改。CSV 使用 `start_at,end_at,category`，时间戳带时区，按摘要指定时区的本地日期截取。
+`--request` 指定议题 JSON，`--csv` 用内部标准 CSV 替换其中的时间摘要。请求明确指定 7/30 天范围；`requested_minutes` 默认 180 分钟，其他议题可显式修改。若已知未来可投入的硬上限，可另填 `available_minutes`；此值同时约束默认建议、条件上限与角色建议，未知时不填。CSV 使用 `start_at,end_at,category`，时间戳带时区，按摘要指定时区的本地日期截取。
 
 聚合器裁剪跨日记录、去除完全重复记录、拒绝重叠区间，并报告覆盖率。未知分类归入 `other`，缺口归入 `untracked`。`load_summary(..., category_map={...})` 支持分类映射。aTimeLogger 只读历史适配器使用区间并集，跨类别重叠归入 `other`，使用方式及分类变更规则见 [docs/ATIMELOGGER.md](docs/ATIMELOGGER.md)。
 

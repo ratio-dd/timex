@@ -42,7 +42,15 @@ def validate_evidence(refs, request):
 
 
 def validate_plan(plan, request):
-    if plan.suggested_minutes > request.requested_minutes:
+    if plan.maximum_minutes is None or plan.adjustment_conditions is None:
+        raise ValueError("plan missing time semantics")
+    if plan.maximum_minutes < plan.suggested_minutes:
+        raise ValueError("plan ceiling below default")
+    if plan.maximum_minutes > plan.suggested_minutes and not any(
+            condition.strip() for condition in plan.adjustment_conditions):
+        raise ValueError("plan missing adjustment trigger")
+    ceiling = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
+    if max(plan.suggested_minutes, plan.maximum_minutes) > ceiling:
         raise ValueError("plan exceeds requested investment")
     if not set(request.constraints).issubset(plan.conditions):
         raise ValueError("plan omitted user constraints")
@@ -70,7 +78,8 @@ def run_council(request: DeliberationRequest, *, model: BaseChatModel | None = N
                 schema = {"initial": InitialPosition, "revise": RevisedPosition, "synthesis": Synthesis}[stage]
 
                 def validate(result):
-                    if role and result.suggested_minutes > request.requested_minutes:
+                    ceiling = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
+                    if role and result.suggested_minutes > ceiling:
                         raise ValueError("proposal exceeds requested investment")
                     if stage == "initial" and caller.settings.provider != "fake":
                         validate_evidence(result.evidence_refs, request_json)
