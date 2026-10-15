@@ -70,3 +70,10 @@ python -m timex.cli --live --compare --format json --output outputs/live-compari
 pytest 覆盖 CSV、事实隔离、交叉回应、分歧契约、调用与费用预算、Token 计量、重试、超时、provider 和 CLI。CI 在 Python 3.11/3.12 上运行 fake 流程，provider 测试通过内存 HTTP 响应验证 SDK 行为。
 
 真实输入放在 `data/private/`，运行结果放在 `outputs/`，凭证通过环境 Secrets 提供；这些本地路径已加入 Git 忽略规则。模型接收分类摘要和手动约束。M2 的 AgentCore 部署、OIDC 和云端验证按后续里程碑推进。
+
+
+## 今晚的文章与 demo
+
+当前重点是协商体验与AWS实践分享。阅读[中文文章编辑稿](docs/ARTICLE.zh-CN.md)、[5分钟demo讲稿与角色soul草案](docs/DEMO.md)、[已有合成情境的完整真实模型协商](docs/demo/conflict-transcript.md)。用户反馈目前像四个人附和，人设/soul不足是待验证假设；本次仅整理文档，不更改角色prompt。
+
+AgentCore Runtime、Gateway、Memory尚未实测；文章相应章节明确标为设计。模型继续使用外部DeepSeek，源码保持公开，私人报告不进入仓库。路线见#7–#14。
