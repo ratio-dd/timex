@@ -1,8 +1,8 @@
 # TimeX — Multi-Agent Deliberation POC
 
-> **版本**：v0.1 · **日期**：2026-10-13 · **状态**：M0 / M1 工程验收完成，质量优势尚未证实
-> **定位**：AWS 无关的个人多立场协商实验，在 Amazon Bedrock AgentCore 上验证运行。  
-> **主要开发位置**：GitHub 仓库 + Codex Cloud；无需个人电脑保持开机或具备本地开发环境。
+> **版本**：v0.1 · **日期**：2026-10-15 · **状态**：M0 / M1 工程验收完成，质量优势尚未证实
+> **定位**：以个人多立场协商体验为主线，使用外部 DeepSeek，逐步在 AgentCore Runtime、Gateway、Memory 上验证；中文文章与 demo 同步交付。
+> **主要开发位置**：GitHub 仓库 + Codex Cloud；AWS执行可使用用户本地CLI。2026-10-15用户提出本地方式，具体登录与部署尚未完成。
 
 ## 0. 一页概要
 
@@ -158,7 +158,7 @@ CSV loader 要处理：时区、跨日活动、空值、无效时长、重复记
            +----------------------+------------------+
            |                                         |
     云端普通 Python CLI                      AgentCore Runtime 适配器
-    (mock/其他模型供应商)                       (Bedrock 模型)
+    (fake / DeepSeek)                         (外部 DeepSeek；待验证)
 ```
 
 第一版可以顺序执行四个角色，后续若简单再行并发；避免为并发引入复杂的同步、重试和状态共享机制。
@@ -226,7 +226,7 @@ docs/
 6. `deploy-aws.yml` 仅 `workflow_dispatch` 手动触发，并使用受保护 Environment；首次部署必须人工确认。
 7. 在云端手动运行 1–3 次真实 AgentCore 验证后停止；P0 不设置定时调用。
 
-**原则**：Codex Cloud 是编码环境，GitHub Actions 是 AWS 部署执行环境。不要把长期 AWS Access Key 放进 Codex 环境或 Git 仓库。OIDC 身份信任需限定仓库、分支/Environment，授权仅部署所需权限。
+**原则**：Codex Cloud 是编码环境；AWS部署可使用经审阅的用户本地CLI流程，或后续GitHub Actions。不要把长期 AWS Access Key 放进 Codex 环境或 Git 仓库。OIDC 身份信任需限定仓库、分支/Environment，授权仅部署所需权限。
 
 ### AgentCore 路线（核对 2026-10 官方文档）
 
@@ -236,8 +236,8 @@ docs/
 - 先通过 CLI 的 `dev`/`validate`/`deploy --dry-run` 及当前版本生成的配置检查部署计划；不要在未经确认时执行 `deploy`。
 - 只在 `aws_entrypoint.py` 引入 AgentCore SDK。`graph.py` 不导入任何 `bedrock_agentcore` 相关包。
 - 云端首轮验证仅部署 **一个 Runtime 项目**；四个逻辑 Agent 不等于四个独立 AWS 服务。
-- 模型供应商默认 Bedrock，选部署区域支持、权限可用且价格较低的轻量文本模型；**不要硬编码某个未经实际验证可用的模型 ID**。
-- 先只创建 Runtime 必需资源；不启用 AgentCore Memory、Gateway、Browser、Code Interpreter、托管 Evaluations、OpenSearch、数据库、复杂 CloudWatch tracing 采样。
+- 协商模型继续使用外部 DeepSeek API；不以 Bedrock 模型权限为前提。AgentCore 服务自身的模型依赖、权限与费用另行核对。
+- 首次只验证一个 Runtime；随后按同一 demo 需要逐项验证 Gateway、Memory 及必要身份能力。保持最小日志和计量，不主动增加 Browser、Code Interpreter、托管 Evaluations、数据库或复杂 tracing。
 - 完成验证后检查 CLI 资源删除计划，清理 Runtime 及残留的构建/日志资源（CloudWatch 日志组等可能需要单独删除）。
 
 ---
@@ -246,7 +246,7 @@ docs/
 
 ### 费用来自四个方向
 
-1. **LLM 推理**：Bedrock 输入/输出 token；模型与区域决定价格。多 Agent 往往是最值得优先约束的开销。
+1. **LLM 推理**：外部 DeepSeek 输入/输出 token；使用实施时核对的供应商价格。多 Agent 往往是最值得优先约束的开销。
 2. **AgentCore Runtime**：按实际 CPU/内存消耗计费，不能把它简单理解为免费的托管入口。
 3. **周边资源**：CloudWatch Logs、代码存储 S3、可能的构建资源及流量。
 4. **CI / Cloud 工具**：GitHub Actions / Codex Cloud 的用量及配额，按各自账户计划计算。
@@ -281,7 +281,7 @@ Runtime cost ≈ consumed_vcpu_seconds / 3600 * runtime_cpu_rate
 Total ≈ Model + Runtime + Logs + Storage + DataTransfer + other services
 ```
 
-模型实际单价由部署时选择的 Bedrock 具体模型、区域、推理层级确认后填写，本文不杜撰。
+模型实际单价由调用时的 DeepSeek 模型与适用计费规则确认；Memory 等服务的后台处理另行计费核对，本文不杜撰。
 
 ---
 
@@ -334,37 +334,34 @@ Total ≈ Model + Runtime + Logs + Storage + DataTransfer + other services
 
 2026-10-13：上述工程标准已满足，真实数据探索型与合成冲突/恢复型对照均已运行。计划 v2 区分默认建议和条件上限；实测与限制见 [M1](M1.md)。人工四项质量评分仍为空，不影响工程里程碑完成，也不据此宣称多 Agent 更优。
 
-### M2 — AgentCore 云端验证
+### M2 — TimeX 体验与 AgentCore 实践
 
-- [ ] AWS Region/模型/权限/价格经人工确认。
-- [ ] GitHub OIDC 部署角色与受保护环境配置完成。
-- [ ] 用最新 AgentCore CLI 把**同一核心**部署为单个 Runtime。
-- [ ] 通过云端手动触发一次真实议会请求，输出与 M1 相同的数据结构。
-- [ ] 截图/保存去敏的结果、成本与调用记录；验证清理流程。
+- [ ] 用户阅读已有协商并给出实际反馈，文章开篇与demo先交付（#8）。
+- [ ] 一个Runtime保留外部DeepSeek，完成授权后的真实执行与费用记录（#9）。
+- [ ] Gateway提供共同摘要，Memory在新会话引用用户确认的偏好（#11、#13）。
+- [ ] IAM/凭证审阅与最小日志证据随各阶段交付（#12、#10）。
+- [ ] 每段都有真实证据和清理状态，不把测试通过当体验成功。
 
-**验收**：完整交付“GitHub 源码 + Codex Cloud 开发 + AgentCore 在线调用”的演示，且没有把 AWS SDK 依赖渗透到协商核心。
+2026-10-15：用户反馈目前像四个人附和，并提出角色人设/soul不足的原因假设；见[演示与人设草案](DEMO.md)。不强制争论，不追加通用规则框架。
 
-### M3 — 可写成 AWS UG 技术文章（非 POC 完成的阻塞条件）
+### M3 — 中文文章与 demo 同步交付
 
-产物不是营销介绍，而是一篇基于真实工程实验的文章，包含架构图、协商案例、单 Agent 对照、AgentCore 部署经验、Token/Runtime 成本结构、失败或局限。
+今晚出稿优先，标题为《把“内心的四种声音”部署到 AWS：基于 AgentCore 与 DeepSeek 的 TimeX 多 Agent 实践》。[文章编辑稿](ARTICLE.zh-CN.md)随#8开始，按实际进度补上AWS章节；#14负责整合。未完成AWS验证时不得以已部署实践发布，使用稿内备选标题与状态说明。
 
-**注意**：若 UG 投稿有紧迫截止日期，**优先完成 M0/M1 或写设计与实验计划**；不要为赶稿仓促授予云端部署权限或虚构 AWS 实测结果。
+2026-10-15用户同意继续使用公开仓库，并明确授权Runtime/Gateway/Memory云端实测；本轮尚未执行。账户登录、区域与实际资源/费用计划仍需落实。在明确授权范围内不重复索要许可；新增范围或费用显著超出计划时再确认。
 
 ---
 
-## 9. 建议的 AWS UG 文章框架
+## 9. AWS Builder Center / AWS UG 文章主线
 
-**暂定标题**：《让四个 Agent 代表我的不同利益开会：基于 LangGraph 与 Amazon Bedrock AgentCore 的个人决策 POC》
+1. 四种利益为何值得开会：从用户体验出发。
+2. LangGraph怎样组织独立表达和交叉回应。
+3. 实际讨论中的附和、有限让步和单助手对照。
+4. 角色soul的改进假设：尚未用新prompt验证。
+5. Runtime承载外部模型，Gateway提供事实，Memory保存确认偏好；IAM在实际场景中解释。
+6. 真实运行、成本、失败和清理证据；未验证内容明确标注。
 
-1. 为什么单一的时间管理 Agent 未必能够表达同一个人的全部诉求。
-2. 四个稳定利益视角 + 两阶段真实协商，为什么不用投票和复杂规则。
-3. AWS 无关的 LangGraph 核心、Bedrock 模型和 AgentCore Runtime 的职责边界。
-4. 一次真实议题运行：初始立场、反驳、立场修订、未解决分歧。
-5. 成本：九次推理调用如何限制，Runtime 与 Token 哪部分更贵（依据实测）。
-6. 单 Agent 对照与失败案例：何时不值得用 Multi-Agent。
-7. 下一步，不扩大当前 POC 的验收范围。
-
-在实际采集数据前，任何价格、延迟、截图或质量评价都只能标注为**示例/预计**。
+源代码公开，私人数据仍不公开。文章不以测试数量证明产品价值，发布需用户指令。
 
 ---
 
@@ -372,7 +369,7 @@ Total ≈ Model + Runtime + Logs + Storage + DataTransfer + other services
 
 > 你正在 GitHub 仓库内实现 TimeX POC。首先完整阅读 `docs/POC.md`。
 >
-> **只实现 M0；不要未经要求推进 M1/M2。** 使用 Python + LangGraph/LangChain，保持议会核心与 AWS 无关。四个角色分别代表事业、探索、生活、健康。完整跑通独立立场、交叉回应、共识/分歧整理两个讨论阶段，并保存结构化结果。使用 fake model 和合成 aTimeLogger 数据，编写 pytest 与 GitHub Actions CI。不要创建 AWS 资源、不要索取 AWS 长期密钥、不要调用付费模型、不要引入数据库/UI/持久化/额外 Agent。
+> 历史 M0 启动提示（不代表当前已授权工作范围）：**只实现 M0；不要未经要求推进 M1/M2。** 使用 Python + LangGraph/LangChain，保持议会核心与 AWS 无关。四个角色分别代表事业、探索、生活、健康。完整跑通独立立场、交叉回应、共识/分歧整理两个讨论阶段，并保存结构化结果。使用 fake model 和合成 aTimeLogger 数据，编写 pytest 与 GitHub Actions CI。不要创建 AWS 资源、不要索取 AWS 长期密钥、不要调用付费模型、不要引入数据库/UI/持久化/额外 Agent。
 >
 > 开始改代码前，先列出 3–5 个你准备交付的文件/结果。完成后实际运行测试，提供执行命令、测试结果、示例输出及限制；优先提交一个小而可验证的 PR。若遇到不确定的 aTimeLogger 格式，用内部标准格式与适配接口，不猜造真实导出列名。不要为了“架构完美”扩大范围。
 
