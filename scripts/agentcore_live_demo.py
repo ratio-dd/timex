@@ -3,6 +3,7 @@ import argparse
 import copy
 from datetime import datetime, timezone
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -29,11 +30,13 @@ LIVE_ENV = {
 }
 
 
-def plan(memory_only=False):
+def plan(memory_only=False, soft_budget_usd=0.05):
+    if not math.isfinite(soft_budget_usd) or not 0 < soft_budget_usd <= 0.05:
+        raise ValueError('Council soft budget must be positive and at most $0.05')
     phases = list(PHASES[1:] if memory_only else PHASES)
     return {'scenario': 'synthetic interest exploration, Gateway facts and confirmed Memory',
             'phases': phases, 'expected_model_calls': 9 * len(phases), 'maximum_model_calls': 10 * len(phases),
-            'soft_budget_usd_per_council': 0.05, 'total_soft_budget_usd': round(0.05 * len(phases), 2),
+            'soft_budget_usd_per_council': soft_budget_usd, 'total_soft_budget_usd': round(soft_budget_usd * len(phases), 4),
             'output_mode': 'deepseek_strict_tools', 'base_url': LIVE_ENV['OPENAI_BASE_URL'],
             'model': 'deepseek-flash', 'thinking': 'disabled', 'region': REGION,
             'pricing_basis': 'peak cache-miss $0.30 input / $1.20 output per million tokens',
@@ -58,20 +61,21 @@ def publish(control, current, environment):
     return ready
 
 
-def check_usage(result):
+def check_usage(result, soft_budget_usd=0.05):
     usage = result['usage']
     if (result['status'] != 'complete' or usage['provider'] != 'openai'
             or not 9 <= usage['model_calls'] <= 10
-            or usage['budget_estimated_usd'] > 0.05):
+            or usage['budget_estimated_usd'] > soft_budget_usd):
         raise ValueError('Incomplete or over-budget council; no further paid phases will run')
 
 
-def run(session, account, state_dir, output, *, memory_only=False):
+def run(session, account, state_dir, output, *, memory_only=False, soft_budget_usd=0.05):
     from botocore.config import Config
     if (output / 'run-started.json').exists():
         raise ValueError('A run already started here; choose a new directory rather than replaying paid calls')
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
-    save(output / 'plan.json', plan(memory_only))
+    chosen_plan = plan(memory_only, soft_budget_usd)
+    save(output / 'plan.json', chosen_plan)
     original = json.loads((state_dir / 'aws-runtime-state.json').read_text())
     integrations = json.loads((state_dir / 'aws-integrations-state.json').read_text())
     if any(state['account'] != account or state['region'] != REGION for state in (original, integrations)):
@@ -133,10 +137,11 @@ def run(session, account, state_dir, output, *, memory_only=False):
                 save(output / 'summary.json', report)
 
     try:
-        ready = publish(control, current, dict(env) | LIVE_ENV)
+        live_env = LIVE_ENV | {'MAX_ESTIMATED_USD_PER_RUN': str(soft_budget_usd)}
+        ready = publish(control, current, dict(env) | live_env)
         report['live_runtime_version'] = ready['agentRuntimeVersion']
-        request = plan(memory_only)['request']
-        for phase in plan(memory_only)['phases']:
+        request = chosen_plan['request']
+        for phase in chosen_plan['phases']:
             value = copy.deepcopy(request)
             if phase == 'memory-default-30':
                 written = invoke('confirm-preference', {'operation': 'confirm_preference', 'confirmed': True,
@@ -161,7 +166,7 @@ def run(session, account, state_dir, output, *, memory_only=False):
             readable.chmod(0o600)
             print(json.dumps({'phase': phase, 'status': result['status'], 'calls': result['usage']['model_calls'],
                               'estimated_usd': result['usage']['estimated_usd']}, ensure_ascii=False), flush=True)
-            check_usage(result)
+            check_usage(result, soft_budget_usd)
             memory = result['context_sources']['memory']
             if phase == 'without-preference':
                 assert memory['event_id'] is None
@@ -229,9 +234,10 @@ if __name__ == '__main__':
     parser.add_argument('--account-id')
     parser.add_argument('--live', action='store_true')
     parser.add_argument('--memory-only', action='store_true', help='Only the two Memory and current-request councils')
+    parser.add_argument('--soft-budget-usd', type=float, default=0.05, help='Per-council soft budget, may only lower the $0.05 default')
     args = parser.parse_args()
     if args.command == 'plan':
-        save(args.output / 'plan.json', plan(args.memory_only), exclusive=True)
+        save(args.output / 'plan.json', plan(args.memory_only, args.soft_budget_usd), exclusive=True)
         print(args.output / 'plan.json')
     else:
         if not args.live or not args.profile or not args.account_id:
@@ -239,7 +245,8 @@ if __name__ == '__main__':
         for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
             os.environ.pop(name, None)
         session, identity = session_for(args.profile, args.account_id)
-        result = run(session, args.account_id, args.state_dir, args.output, memory_only=args.memory_only)
+        result = run(session, args.account_id, args.state_dir, args.output, memory_only=args.memory_only,
+                     soft_budget_usd=args.soft_budget_usd)
         print(json.dumps({k: result.get(k) for k in ('status', 'known_model_calls', 'known_model_estimated_usd',
                                                    'fake_restored', 'demo_event_deleted')}, indent=2))
         raise SystemExit(0 if result['status'] == 'complete' and result['fake_restored'] and result['demo_event_deleted'] else 1)

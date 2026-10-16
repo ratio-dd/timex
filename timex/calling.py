@@ -95,6 +95,11 @@ def messages_for(payload, schema, repair=None):
     contract = schema.model_json_schema()
     request = payload["request"]
     ceiling = DeliberationRequest.model_validate(request).investment_ceiling
+    instruction += f'本轮有效投入总上限为{ceiling}分钟：默认建议、条件方案、综合maximum_minutes均不得超过它。\n'
+    if request.get('preference_max_minutes') is not None and request.get('available_minutes') is None:
+        instruction += ('历史偏好本轮生效。requested_minutes是询问的候选总额，不构成覆盖偏好；'
+            '已确认的自主时段事实保留，但不等于本轮应投入全部时段。'
+            '不得提出超出本轮上限的分段合计或条件追加；如希望改偏好，只说明需用户另行确认，不预写更大额度。\n')
     if stage == 'revise':
         own = payload['round1'][payload['role']]
         instruction += '你的固定首轮基线：' + json.dumps({
@@ -102,6 +107,8 @@ def messages_for(payload, schema, repair=None):
         contract['properties']['concessions']['maxItems'] = 1
         contract['properties']['concessions']['items']['pattern'] = (
             '^默认建议从' + str(own['suggested_minutes']) + '分钟调整为[0-9]+分钟。$')
+        contract['$defs']['Response']['properties']['cited_position']['enum'] = [
+            value['position'] for role, value in payload['round1'].items() if role != payload['role']]
     if "suggested_minutes" in contract["properties"]:
         contract["properties"]["suggested_minutes"]["maximum"] = ceiling
     if payload["stage"] in {"synthesis", "baseline"}:
@@ -201,6 +208,15 @@ class BoundedCaller:
             tool = strict_tool(json.loads(messages[0].content.splitlines()[-1]), payload['stage'])
             tool_name = tool['function']['name']
             kwargs.update(tools=[tool], tool_choice={'type': 'function', 'function': {'name': tool_name}})
+            # One output channel and one schema. A second body schema can invite
+            # schema echoes and double-escaped quotations in tool arguments.
+            instruction = messages[0].content.rsplit('\n', 1)[0]
+            instruction = instruction.replace('只输出符合下列 schema 的 JSON 对象', '仅通过指定输出函数的参数提交结果')
+            instruction = instruction.replace('输出实例本身，根字段严格按 schema；不加角色名外层，不输出 schema 或 Markdown 围栏。',
+                '参数根字段严格按工具契约；不加角色名或result外层，不输出schema或Markdown围栏。')
+            instruction = instruction.replace('重新生成完整 JSON', '重新提交完整函数参数')
+            messages[0] = SystemMessage(content=instruction + '\n仅调用' + tool_name
+                + '一次提交结果，不返回正文；普通文本优先使用中文引号，引用立场须原样选取契约列出的值。')
         tool_input = json.dumps(kwargs.get('tools', []), ensure_ascii=False) if tool_name else ''
         if sum(len(m.content) for m in messages) + len(tool_input) > self.limits.max_input_characters:
             raise LimitError("input length limit exceeded")

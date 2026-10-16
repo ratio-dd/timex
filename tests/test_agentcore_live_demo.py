@@ -27,6 +27,15 @@ def test_plan_is_three_councils_with_explicit_total_budget():
     memory = demo.plan(memory_only=True)
     assert memory['phases'] == ['memory-default-30', 'current-request-60']
     assert memory['maximum_model_calls'] == 20 and memory['total_soft_budget_usd'] == 0.1
+    assert demo.plan(memory_only=True, soft_budget_usd=0.035)['total_soft_budget_usd'] == 0.07
+    with pytest.raises(ValueError):
+        demo.check_usage({'status':'complete','usage':{'provider':'openai','model_calls':9,'budget_estimated_usd':0.04}}, 0.035)
+
+
+@pytest.mark.parametrize('budget', [0, -0.01, 0.051, float('nan'), float('inf')])
+def test_plan_cannot_raise_or_disable_budget(budget):
+    with pytest.raises(ValueError):
+        demo.plan(soft_budget_usd=budget)
 
 
 def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(monkeypatch, tmp_path):

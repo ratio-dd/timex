@@ -145,6 +145,11 @@ def test_memory_cap_preserves_confirmed_time_facts_and_does_not_invent_availabil
     body, status = runtime.handle_invocation({'request': request_data, 'use_memory': True})
     assert status == 200 and body['status'] == 'complete'
     assert body['proposed_plan']['maximum_minutes'] <= minutes
+    from timex.calling import messages_for
+    from timex.models import InitialPosition
+    messages = messages_for({'stage':'initial','request':value.model_dump(mode='json')}, InitialPosition)
+    assert f'本轮有效投入总上限为{minutes}分钟' in messages[0].content
+    assert 'requested_minutes是询问的候选总额，不构成覆盖偏好' in messages[0].content
 
 
 def test_http_cannot_inject_server_memory_cap(request_data):

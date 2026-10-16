@@ -96,6 +96,13 @@ def test_strict_tools_use_real_sdk_closed_contracts_and_meter_all_stages():
         assert tool['strict'] is True
         assert wire['tool_choice']['function']['name'] == tool['name']
         assert_closed_schema(tool['parameters'])
+        instruction = wire['messages'][0]['content']
+        assert '仅通过指定输出函数的参数提交结果' in instruction
+        assert '只输出符合下列 schema 的 JSON 对象' not in instruction
+        assert '"$defs"' not in instruction
+        if tool['name'] == 'submit_revise':
+            peer = tool['parameters']['properties']['responses_to_others']['items']
+            assert len(peer['properties']['cited_position']['enum']) == 3
 
 
 @pytest.mark.parametrize('damage, code', [('json', 'json_invalid'), ('extra', 'extra_forbidden'),
