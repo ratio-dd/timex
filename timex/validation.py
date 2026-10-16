@@ -5,6 +5,8 @@ from .models import ValidationIssue
 
 
 SEMANTIC_ERRORS = {
+    "concession lacks verified change": ("concession_change_required", "concessions"),
+    "invalid structured output channel": ("output_channel_invalid", "$"),
     "plan missing time semantics": ("time_semantics_required", "proposed_plan"),
     "plan ceiling below default": ("ceiling_below_default", "proposed_plan.maximum_minutes"),
     "plan missing adjustment trigger": ("adjustment_trigger_required", "proposed_plan.adjustment_conditions"),

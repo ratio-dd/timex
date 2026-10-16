@@ -19,7 +19,7 @@ def initial(payload: dict[str, Any]) -> dict[str, Any]:
     sleep = facts.category_minutes.get("sleep", 0)
     low_sleep = sleep > 0 and facts.coverage >= 0.5 and sleep / days < 420
     high_work = facts.category_minutes.get("work", 0) / days > 480
-    requested = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
+    requested = request.investment_ceiling
     no_career_gain = any(word in request.question for word in ("无职业收益", "无明显职业收益", "非功利"))
     if role == "career":
         amount = 0 if no_career_gain else min(requested, 60 if high_work else requested)
@@ -68,7 +68,7 @@ def revise(payload: dict[str, Any]) -> dict[str, Any]:
     health_disagrees = role != "health" and positions["health"]["suggested_minutes"] == 0 and revised > 0
     return {"revised_position": f"修订后建议新增投入 {revised} 分钟。", "suggested_minutes": revised,
             "responses_to_others": responses,
-            "concessions": [f"将 {own} 分钟缩减为 {revised} 分钟，以回应其他立场的时间上限。"] if changed else [],
+            "concessions": [f"默认建议从{own}分钟调整为{revised}分钟。"] if changed else [],
             "remaining_objections": ["健康立场建议零新增投入；本建议不是全体共识。"] if health_disagrees else
                                     ["优先恢复，暂不接受新增投入。"] if revised == 0 else [],
             "change_explanation": "根据其他角色提出的具体时长缩小实验。" if changed else
@@ -139,7 +139,8 @@ def make_model(provider: str | None = None, *, live: bool = False,
                       max_retries=0, streaming=False, stream_usage=False,
                       use_responses_api=False, cache=False, http_socket_options=(),
                       extra_body={"thinking": {"type": settings.thinking}} if settings.thinking else None,
-                      model_kwargs={"response_format": {"type": "json_object"}})
+                      model_kwargs={} if settings.output_mode == 'deepseek_strict_tools' else
+                                   {"response_format": {"type": "json_object"}})
 
 
 def retryable(error: Exception) -> bool:

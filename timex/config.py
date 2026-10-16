@@ -40,12 +40,17 @@ class ModelSettings:
     model_name: str | None = None
     base_url: str | None = None
     thinking: str | None = None
+    output_mode: str = 'json_object'
     input_usd_per_million: float | None = None
     output_usd_per_million: float | None = None
 
     def __post_init__(self):
         if self.provider not in ("fake", "openai"):
             raise ValueError("MODEL_PROVIDER must be fake or openai")
+        if self.output_mode not in ('json_object', 'deepseek_strict_tools'):
+            raise ValueError('unsupported model output mode')
+        if self.output_mode == 'deepseek_strict_tools' and self.base_url != 'https://api.deepseek.com/beta':
+            raise ValueError('DeepSeek strict tools require the documented beta endpoint')
         if self.thinking not in (None, "enabled", "disabled"):
             raise ValueError("MODEL_THINKING must be enabled or disabled when configured")
         if self.provider == "openai":
@@ -74,6 +79,7 @@ class ModelSettings:
         return cls(provider=provider, model_name=os.getenv("MODEL_NAME"),
                    base_url=os.getenv("OPENAI_BASE_URL"),
                    thinking=os.getenv("MODEL_THINKING"),
+                   output_mode=os.getenv('MODEL_OUTPUT_MODE', 'json_object'),
                    input_usd_per_million=price("MODEL_INPUT_USD_PER_MILLION"),
                    output_usd_per_million=price("MODEL_OUTPUT_USD_PER_MILLION"))
 
