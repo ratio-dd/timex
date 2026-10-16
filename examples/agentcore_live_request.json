@@ -1,0 +1,21 @@
+{
+  "question": "【完全合成场景】本周想花最多90分钟，为好奇心做一个可随时停止的 TimeX 小实验，是否值得尝试？仅探索兴趣，不要求职业回报或可交付作品；90分钟是本周总额，不要求连续完成。",
+  "time_window_days": 7,
+  "requested_minutes": 90,
+  "available_minutes": null,
+  "constraints": [
+    "合成设定：本人已核实本周有总计90分钟自主时段；不必用满，可以分开使用，不是从记录缺口推断的空闲。",
+    "合成设定：本人当前精力7/10；不挤占睡眠、不改动既定出行和活动，疲劳即停。",
+    "本次目的仅为兴趣探索，用户不要求职业收益、作品或收入作为投入前提。"
+  ],
+  "time_summary": {
+    "period_start": "2026-10-05",
+    "period_end": "2026-10-11",
+    "timezone": "Asia/Shanghai",
+    "category_minutes": {"work": 3360, "learning": 0, "leisure": 840, "sleep": 2520, "exercise": 0, "social": 0, "other": 0, "untracked": 3360},
+    "tracked_minutes": 6720,
+    "untracked_minutes": 3360,
+    "coverage": 0.6666666666666666,
+    "notes": ["完全合成的公开演示输入；历史摘要由 Gateway 替换，未来时段和主观状态来自本合成场景的明确设定。"]
+  }
+}
