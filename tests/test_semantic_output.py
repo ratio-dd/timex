@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai.chat_models.base import BaseChatOpenAI
 
-from timex.calling import BoundedCaller, LimitError, messages_for
+from timex.calling import BoundedCaller, LimitError, messages_for, output_shape
 from timex.comparison import run_comparison
 from timex.config import Limits, ModelSettings
 from timex.graph import run_council
@@ -133,3 +133,11 @@ def test_strict_factory_requires_beta_and_omits_json_object_mode(monkeypatch):
     assert 'response_format' not in model._get_request_payload('Return a tool result')
     with pytest.raises(ValueError, match='beta endpoint'):
         ModelSettings(provider='openai', base_url='https://api.deepseek.com', output_mode='deepseek_strict_tools')
+
+
+@pytest.mark.parametrize('content, shape', [(None, 'not_text'), ('PRIVATE_INVALID', 'invalid_json'),
+    ('"PRIVATE_VALUE"', 'json_string'), ('["PRIVATE_VALUE"]', 'json_non_object'),
+    ('{"PRIVATE_KEY":"PRIVATE_VALUE"}', 'json_object'),
+    ('{"type":"object","properties":{"PRIVATE_KEY":{}}}', 'schema_wrapper')])
+def test_output_diagnostics_retain_no_values_or_unknown_keys(content, shape):
+    assert output_shape(content) == shape and 'PRIVATE' not in output_shape(content)

@@ -21,8 +21,8 @@ from timex.models import CouncilResult, DeliberationRequest
 PHASES = ('without-preference', 'memory-default-30', 'current-request-60')
 LIVE_ENV = {
     'TIMEX_ALLOW_LIVE': '1', 'MODEL_PROVIDER': 'openai', 'MODEL_NAME': 'deepseek-flash',
-    'OPENAI_BASE_URL': 'https://api.deepseek.com/beta', 'MODEL_THINKING': 'disabled',
-    'MODEL_OUTPUT_MODE': 'deepseek_strict_tools',
+    'OPENAI_BASE_URL': 'https://api.deepseek.com', 'MODEL_THINKING': 'disabled',
+    'MODEL_OUTPUT_MODE': 'json_object',
     'MODEL_INPUT_USD_PER_MILLION': '0.30', 'MODEL_OUTPUT_USD_PER_MILLION': '1.20',
     'MAX_MODEL_CALLS': '10', 'MAX_RETRIES': '1', 'MAX_ESTIMATED_USD_PER_RUN': '0.05',
     'MAX_INPUT_TOKENS': '24000', 'TOTAL_TIMEOUT_SECONDS': '180',
@@ -30,14 +30,16 @@ LIVE_ENV = {
 }
 
 
-def plan(memory_only=False, soft_budget_usd=0.05):
+def plan(memory_only=False, soft_budget_usd=0.05, override_only=False):
+    if memory_only and override_only:
+        raise ValueError('Select only one phase group')
     if not math.isfinite(soft_budget_usd) or not 0 < soft_budget_usd <= 0.05:
         raise ValueError('Council soft budget must be positive and at most $0.05')
-    phases = list(PHASES[1:] if memory_only else PHASES)
+    phases = list(PHASES[2:] if override_only else PHASES[1:] if memory_only else PHASES)
     return {'scenario': 'synthetic interest exploration, Gateway facts and confirmed Memory',
             'phases': phases, 'expected_model_calls': 9 * len(phases), 'maximum_model_calls': 10 * len(phases),
             'soft_budget_usd_per_council': soft_budget_usd, 'total_soft_budget_usd': round(soft_budget_usd * len(phases), 4),
-            'output_mode': 'deepseek_strict_tools', 'base_url': LIVE_ENV['OPENAI_BASE_URL'],
+            'output_mode': LIVE_ENV['MODEL_OUTPUT_MODE'], 'base_url': LIVE_ENV['OPENAI_BASE_URL'],
             'model': 'deepseek-flash', 'thinking': 'disabled', 'region': REGION,
             'pricing_basis': 'peak cache-miss $0.30 input / $1.20 output per million tokens',
             'pricing_source': 'https://api-docs.deepseek.com/quick_start/pricing/',
@@ -69,12 +71,12 @@ def check_usage(result, soft_budget_usd=0.05):
         raise ValueError('Incomplete or over-budget council; no further paid phases will run')
 
 
-def run(session, account, state_dir, output, *, memory_only=False, soft_budget_usd=0.05):
+def run(session, account, state_dir, output, *, memory_only=False, soft_budget_usd=0.05, override_only=False):
     from botocore.config import Config
     if (output / 'run-started.json').exists():
         raise ValueError('A run already started here; choose a new directory rather than replaying paid calls')
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
-    chosen_plan = plan(memory_only, soft_budget_usd)
+    chosen_plan = plan(memory_only, soft_budget_usd, override_only)
     save(output / 'plan.json', chosen_plan)
     original = json.loads((state_dir / 'aws-runtime-state.json').read_text())
     integrations = json.loads((state_dir / 'aws-integrations-state.json').read_text())
@@ -143,13 +145,13 @@ def run(session, account, state_dir, output, *, memory_only=False, soft_budget_u
         request = chosen_plan['request']
         for phase in chosen_plan['phases']:
             value = copy.deepcopy(request)
-            if phase == 'memory-default-30':
+            if phase == 'memory-default-30' or (phase == 'current-request-60' and created_event is None):
                 written = invoke('confirm-preference', {'operation': 'confirm_preference', 'confirmed': True,
                     'preference': {'text': f'【合成确认偏好 {nonce}】后续兴趣小实验默认新增投入最多30分钟，当前明确要求可覆盖。',
                                    'maximum_minutes': 30}})
                 created_event = written['memory']['event_id']
                 report['operations'].append({'operation': 'confirm_preference', 'event_id': created_event})
-            elif phase == 'current-request-60':
+            if phase == 'current-request-60':
                 value['available_minutes'] = 60
             result = invoke(phase, {'request': value, 'summary_source': 'gateway', 'use_memory': True, 'live': True})
             report['phases'].append({'phase': phase, 'usage': result['usage'],
@@ -233,11 +235,13 @@ if __name__ == '__main__':
     parser.add_argument('--profile')
     parser.add_argument('--account-id')
     parser.add_argument('--live', action='store_true')
-    parser.add_argument('--memory-only', action='store_true', help='Only the two Memory and current-request councils')
+    phases = parser.add_mutually_exclusive_group()
+    phases.add_argument('--memory-only', action='store_true', help='Only the two Memory and current-request councils')
+    phases.add_argument('--override-only', action='store_true', help='Confirm 30-minute preference, then only the current 60-minute council')
     parser.add_argument('--soft-budget-usd', type=float, default=0.05, help='Per-council soft budget, may only lower the $0.05 default')
     args = parser.parse_args()
     if args.command == 'plan':
-        save(args.output / 'plan.json', plan(args.memory_only, args.soft_budget_usd), exclusive=True)
+        save(args.output / 'plan.json', plan(args.memory_only, args.soft_budget_usd, args.override_only), exclusive=True)
         print(args.output / 'plan.json')
     else:
         if not args.live or not args.profile or not args.account_id:
@@ -246,7 +250,7 @@ if __name__ == '__main__':
             os.environ.pop(name, None)
         session, identity = session_for(args.profile, args.account_id)
         result = run(session, args.account_id, args.state_dir, args.output, memory_only=args.memory_only,
-                     soft_budget_usd=args.soft_budget_usd)
+                     soft_budget_usd=args.soft_budget_usd, override_only=args.override_only)
         print(json.dumps({k: result.get(k) for k in ('status', 'known_model_calls', 'known_model_estimated_usd',
                                                    'fake_restored', 'demo_event_deleted')}, indent=2))
         raise SystemExit(0 if result['status'] == 'complete' and result['fake_restored'] and result['demo_event_deleted'] else 1)

@@ -157,6 +157,8 @@ class CallUsage(Contract):
     stage: str
     role: str
     reported_model: str | None = None
+    output_mode: Literal['json_object', 'deepseek_strict_tools'] | None = None
+    output_shape: Literal['not_text', 'invalid_json', 'json_string', 'json_object', 'json_non_object', 'schema_wrapper'] | None = None
     status: str = "pending"
     validation_errors: list[ValidationIssue] = Field(default_factory=list)
     input_tokens: int | None = Field(default=None, ge=0)
