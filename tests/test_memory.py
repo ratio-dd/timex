@@ -91,10 +91,16 @@ def test_current_structured_limit_overrides_remembered_default(store, request_da
     request = DeliberationRequest.model_validate(request_data)
     value, source = memory.apply_preference(request)
     assert value.available_minutes == current
-    assert value.preference_max_minutes is None and value.investment_ceiling == current
+    assert value.preference_max_minutes == 30 and value.investment_ceiling == current
     assert value.constraints == request.constraints
     assert source['precedence'] == 'current_request' and source['applied'] is False
     assert source['conflict'] is True
+    assert source['available_minutes'] == current and source['effective_investment_ceiling'] == current
+    from timex.calling import messages_for
+    from timex.models import InitialPosition
+    instruction = messages_for({'stage':'initial','request':value.model_dump(mode='json')}, InitialPosition)[0].content
+    assert f'当前明确上限{current}分钟覆盖它' in instruction
+    assert '历史偏好保留为来源，本轮不生效' in instruction
 
 
 def test_assistant_suggestions_and_unconfirmed_events_never_become_preferences(store, request_data):

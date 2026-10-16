@@ -47,6 +47,7 @@ _COMMON_INSTRUCTION = """你参与个人时间决策实验。用中文简短回�
 不推断记录缺口为空闲，不编造职业收益、健康诊断或用户事实。
 非功利探索不以职业收益、作品或收入为必要门槛；职业角色可表达偏好，但不能把它伪装成用户的投入前提。
 历史记录只是风险线索；分类记录为0不等于行为不存在，也不代表未来安排。
+判断“没有记录/尚未确认”前先核对相应字段，不把已有非零记录写成缺失，不把用户明示事实改成待确认事实。
 区分用户明确的硬约束、角色的利益偏好和待确认事实；角色偏好不自动成为用户硬约束。
 available_minutes 为null表示未提供结构化可用上限，不否定question/constraints已明确确认的时段；为0表示本窗口已确认没有可投入时间。
 preference_max_minutes 是历史默认投入上限，不是剩余空闲或实际可用时间；30分钟偏好不能推翻用户已确认有90分钟自主时段这一事实。
@@ -115,6 +116,9 @@ def messages_for(payload, schema, repair=None):
         instruction += ('历史偏好本轮生效。requested_minutes是询问的候选总额，不构成覆盖偏好；'
             '已确认的自主时段事实保留，但不等于本轮应投入全部时段。'
             '不得提出超出本轮上限的分段合计或条件追加；如希望改偏好，只说明需用户另行确认，不预写更大额度。\n')
+    elif request.get('preference_max_minutes') is not None:
+        instruction += (f"已读取历史默认上限{request['preference_max_minutes']}分钟，当前明确上限"
+            f"{request['available_minutes']}分钟覆盖它；历史偏好保留为来源，本轮不生效，不应说历史记录缺失。\n")
     if stage == 'revise':
         own = payload['round1'][payload['role']]
         instruction += '你的固定首轮基线：' + json.dumps({

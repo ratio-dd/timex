@@ -30,12 +30,12 @@ LIVE_ENV = {
 }
 
 
-def plan(memory_only=False, soft_budget_usd=0.05, override_only=False):
-    if memory_only and override_only:
+def plan(memory_only=False, soft_budget_usd=0.05, override_only=False, preference_only=False):
+    if sum((memory_only, override_only, preference_only)) > 1:
         raise ValueError('Select only one phase group')
     if not math.isfinite(soft_budget_usd) or not 0 < soft_budget_usd <= 0.05:
         raise ValueError('Council soft budget must be positive and at most $0.05')
-    phases = list(PHASES[2:] if override_only else PHASES[1:] if memory_only else PHASES)
+    phases = list(PHASES[1:2] if preference_only else PHASES[2:] if override_only else PHASES[1:] if memory_only else PHASES)
     return {'scenario': 'synthetic interest exploration, Gateway facts and confirmed Memory',
             'phases': phases, 'expected_model_calls': 9 * len(phases), 'maximum_model_calls': 10 * len(phases),
             'soft_budget_usd_per_council': soft_budget_usd, 'total_soft_budget_usd': round(soft_budget_usd * len(phases), 4),
@@ -71,12 +71,12 @@ def check_usage(result, soft_budget_usd=0.05):
         raise ValueError('Incomplete or over-budget council; no further paid phases will run')
 
 
-def run(session, account, state_dir, output, *, memory_only=False, soft_budget_usd=0.05, override_only=False):
+def run(session, account, state_dir, output, *, memory_only=False, soft_budget_usd=0.05, override_only=False, preference_only=False):
     from botocore.config import Config
     if (output / 'run-started.json').exists():
         raise ValueError('A run already started here; choose a new directory rather than replaying paid calls')
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
-    chosen_plan = plan(memory_only, soft_budget_usd, override_only)
+    chosen_plan = plan(memory_only, soft_budget_usd, override_only, preference_only)
     save(output / 'plan.json', chosen_plan)
     original = json.loads((state_dir / 'aws-runtime-state.json').read_text())
     integrations = json.loads((state_dir / 'aws-integrations-state.json').read_text())
@@ -238,10 +238,11 @@ if __name__ == '__main__':
     phases = parser.add_mutually_exclusive_group()
     phases.add_argument('--memory-only', action='store_true', help='Only the two Memory and current-request councils')
     phases.add_argument('--override-only', action='store_true', help='Confirm 30-minute preference, then only the current 60-minute council')
+    phases.add_argument('--preference-only', action='store_true', help='Only the 30-minute confirmed-preference council')
     parser.add_argument('--soft-budget-usd', type=float, default=0.05, help='Per-council soft budget, may only lower the $0.05 default')
     args = parser.parse_args()
     if args.command == 'plan':
-        save(args.output / 'plan.json', plan(args.memory_only, args.soft_budget_usd, args.override_only), exclusive=True)
+        save(args.output / 'plan.json', plan(args.memory_only, args.soft_budget_usd, args.override_only, args.preference_only), exclusive=True)
         print(args.output / 'plan.json')
     else:
         if not args.live or not args.profile or not args.account_id:
@@ -250,7 +251,7 @@ if __name__ == '__main__':
             os.environ.pop(name, None)
         session, identity = session_for(args.profile, args.account_id)
         result = run(session, args.account_id, args.state_dir, args.output, memory_only=args.memory_only,
-                     soft_budget_usd=args.soft_budget_usd, override_only=args.override_only)
+                     soft_budget_usd=args.soft_budget_usd, override_only=args.override_only, preference_only=args.preference_only)
         print(json.dumps({k: result.get(k) for k in ('status', 'known_model_calls', 'known_model_estimated_usd',
                                                    'fake_restored', 'demo_event_deleted')}, indent=2))
         raise SystemExit(0 if result['status'] == 'complete' and result['fake_restored'] and result['demo_event_deleted'] else 1)

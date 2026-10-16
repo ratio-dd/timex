@@ -30,6 +30,8 @@ def test_plan_is_three_councils_with_explicit_total_budget():
     override = demo.plan(override_only=True, soft_budget_usd=0.035)
     assert override['phases'] == ['current-request-60'] and override['maximum_model_calls'] == 10
     assert override['output_mode'] == 'json_object' and override['total_soft_budget_usd'] == 0.035
+    preference = demo.plan(preference_only=True, soft_budget_usd=0.035)
+    assert preference['phases'] == ['memory-default-30'] and preference['maximum_model_calls'] == 10
     with pytest.raises(ValueError):
         demo.plan(memory_only=True, override_only=True)
     assert demo.plan(memory_only=True, soft_budget_usd=0.035)['total_soft_budget_usd'] == 0.07
@@ -43,8 +45,9 @@ def test_plan_cannot_raise_or_disable_budget(budget):
         demo.plan(soft_budget_usd=budget)
 
 
-@pytest.mark.parametrize('override_only', [False, True])
-def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(monkeypatch, tmp_path, override_only):
+@pytest.mark.parametrize('mode', ['default', 'override', 'preference'])
+def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(monkeypatch, tmp_path, mode):
+    override_only, preference_only = mode == 'override', mode == 'preference'
     account = '123456789012'
     runtime = {'account': account, 'region': 'us-east-1', 'agentRuntimeId': 'synthetic', 'agentRuntimeArn': 'synthetic-arn'}
     integrations = {'account': account, 'region': 'us-east-1', 'deepseek_secret_arn': 'secret',
@@ -85,6 +88,8 @@ def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(
             if override_only:
                 assert self.events and payload['request']['available_minutes'] == 60
                 assert payload['use_memory'] is True and payload['summary_source'] == 'gateway'
+            if preference_only:
+                assert self.events and payload['request'].get('available_minutes') is None
             result = {'question': 'Synthetic partial council', 'status': 'partial', 'usage': {'provider': 'openai', 'model_calls': 1,
                       'budget_estimated_usd': 0.001, 'estimated_usd': 0.001},
                       'round1': {}, 'round2': {}, 'proposed_plan': None, 'context_sources': {}}
@@ -100,13 +105,13 @@ def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(
 
     monkeypatch.setattr(demo, 'publish', publish)
     session = SimpleNamespace(client=lambda name, **kwargs: control if name == 'bedrock-agentcore-control' else Data())
-    result = demo.run(session, account, state_dir, tmp_path / 'report', override_only=override_only)
-    assert len(calls) == len(stopped) == (2 if override_only else 1)
+    result = demo.run(session, account, state_dir, tmp_path / 'report', override_only=override_only, preference_only=preference_only)
+    assert len(calls) == len(stopped) == (1 if mode == 'default' else 2)
     assert published[0]['TIMEX_ALLOW_LIVE'] == '1' and published[-1] == env
     assert result['fake_restored'] is True and result['status'] == 'failed_or_partial'
     assert result['known_model_calls'] == 1 and result['measurement_complete'] is False
     assert result['demo_event_deleted'] is True
-    phase = 'current-request-60' if override_only else 'without-preference'
+    phase = 'current-request-60' if override_only else 'memory-default-30' if preference_only else 'without-preference'
     readable = (tmp_path / 'report' / (phase + '.html')).read_text()
     assert 'partial' in readable and 'Synthetic partial council' in readable
     assert json.loads((state_dir / 'aws-runtime-state.json').read_text())['agentRuntimeVersion'] == '2'

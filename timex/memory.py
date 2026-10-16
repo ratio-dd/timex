@@ -106,11 +106,15 @@ def apply_preference(request):
         return request, provenance(scope) | {'applied': False, 'precedence': 'no_confirmed_preference'}
     event, preference = events[-1]
     context = provenance(scope, event, preference)
-    if request.available_minutes is not None:
-        return request, context | {'applied': False, 'precedence': 'current_request',
-                                    'conflict': request.available_minutes != preference.maximum_minutes}
     data = request.model_dump()
     data['preference_max_minutes'] = preference.maximum_minutes
+    if request.available_minutes is not None:
+        # Preserve the historical fact even when its cap is not active.
+        return DeliberationRequest.model_validate(data), context | {
+            'applied': False, 'precedence': 'current_request',
+            'conflict': request.available_minutes != preference.maximum_minutes,
+            'effective_investment_ceiling': request.investment_ceiling,
+            'available_minutes': request.available_minutes}
     data['constraints'].append('用户已确认的历史默认投入上限（不是实际可用时间；当前明确要求可覆盖）：' + preference.text)
     value = DeliberationRequest.model_validate(data)
     return value, context | {'applied': True, 'precedence': 'confirmed_memory_default',
