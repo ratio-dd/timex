@@ -3,7 +3,7 @@ import json
 import os
 from typing import Literal
 
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 
 from .config import Limits, ModelSettings
 from .graph import run_council
@@ -15,6 +15,12 @@ class RuntimeInvocation(Contract):
     live: bool = Field(default=False, strict=True)
     summary_source: Literal['request', 'gateway'] = 'request'
     use_memory: bool = Field(default=False, strict=True)
+
+    @model_validator(mode='after')
+    def server_preference_only(self):
+        if self.request.preference_max_minutes is not None:
+            raise ValueError('Memory preference must come from the server')
+        return self
 
 
 def _load_api_key():

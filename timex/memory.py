@@ -110,8 +110,9 @@ def apply_preference(request):
         return request, context | {'applied': False, 'precedence': 'current_request',
                                     'conflict': request.available_minutes != preference.maximum_minutes}
     data = request.model_dump()
-    data['available_minutes'] = preference.maximum_minutes
-    data['constraints'].append('用户已确认的历史默认偏好（当前明确要求可覆盖）：' + preference.text)
+    data['preference_max_minutes'] = preference.maximum_minutes
+    data['constraints'].append('用户已确认的历史默认投入上限（不是实际可用时间；当前明确要求可覆盖）：' + preference.text)
     value = DeliberationRequest.model_validate(data)
     return value, context | {'applied': True, 'precedence': 'confirmed_memory_default',
-                             'effective_available_minutes': value.available_minutes}
+                             'effective_investment_ceiling': value.investment_ceiling,
+                             'available_minutes': value.available_minutes}

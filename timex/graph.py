@@ -49,7 +49,7 @@ def validate_plan(plan, request):
     if plan.maximum_minutes > plan.suggested_minutes and not any(
             condition.strip() for condition in plan.adjustment_conditions):
         raise ValueError("plan missing adjustment trigger")
-    ceiling = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
+    ceiling = request.investment_ceiling
     if max(plan.suggested_minutes, plan.maximum_minutes) > ceiling:
         raise ValueError("plan exceeds requested investment")
     if not set(request.constraints).issubset(plan.conditions):
@@ -78,12 +78,17 @@ def run_council(request: DeliberationRequest, *, model: BaseChatModel | None = N
                 schema = {"initial": InitialPosition, "revise": RevisedPosition, "synthesis": Synthesis}[stage]
 
                 def validate(result):
-                    ceiling = min(request.requested_minutes, request.available_minutes) if request.available_minutes is not None else request.requested_minutes
+                    ceiling = request.investment_ceiling
                     if role and result.suggested_minutes > ceiling:
                         raise ValueError("proposal exceeds requested investment")
                     if stage == "initial" and caller.settings.provider != "fake":
                         validate_evidence(result.evidence_refs, request_json)
                     if stage == "revise":
+                        before = state['round1'][role]['suggested_minutes']
+                        expected = f'默认建议从{before}分钟调整为{result.suggested_minutes}分钟。'
+                        if (result.concessions and (before == result.suggested_minutes
+                                or result.concessions != [expected])):
+                            raise ValueError('concession lacks verified change')
                         for response in result.responses_to_others:
                             if response.role == role or response.cited_position != state["round1"][response.role]["position"]:
                                 raise ValueError("untraceable peer response")

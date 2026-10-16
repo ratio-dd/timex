@@ -1,4 +1,4 @@
-"""Three explicitly authorized cloud councils; restore fake mode and remove demo memory."""
+"""Bounded authorized cloud councils; restore fake mode and remove demo memory."""
 import argparse
 import copy
 from datetime import datetime, timezone
@@ -20,7 +20,8 @@ from timex.models import CouncilResult, DeliberationRequest
 PHASES = ('without-preference', 'memory-default-30', 'current-request-60')
 LIVE_ENV = {
     'TIMEX_ALLOW_LIVE': '1', 'MODEL_PROVIDER': 'openai', 'MODEL_NAME': 'deepseek-flash',
-    'OPENAI_BASE_URL': 'https://api.deepseek.com', 'MODEL_THINKING': 'disabled',
+    'OPENAI_BASE_URL': 'https://api.deepseek.com/beta', 'MODEL_THINKING': 'disabled',
+    'MODEL_OUTPUT_MODE': 'deepseek_strict_tools',
     'MODEL_INPUT_USD_PER_MILLION': '0.30', 'MODEL_OUTPUT_USD_PER_MILLION': '1.20',
     'MAX_MODEL_CALLS': '10', 'MAX_RETRIES': '1', 'MAX_ESTIMATED_USD_PER_RUN': '0.05',
     'MAX_INPUT_TOKENS': '24000', 'TOTAL_TIMEOUT_SECONDS': '180',
@@ -28,10 +29,12 @@ LIVE_ENV = {
 }
 
 
-def plan():
+def plan(memory_only=False):
+    phases = list(PHASES[1:] if memory_only else PHASES)
     return {'scenario': 'synthetic interest exploration, Gateway facts and confirmed Memory',
-            'phases': list(PHASES), 'expected_model_calls': 27, 'maximum_model_calls': 30,
-            'soft_budget_usd_per_council': 0.05, 'total_soft_budget_usd': 0.15,
+            'phases': phases, 'expected_model_calls': 9 * len(phases), 'maximum_model_calls': 10 * len(phases),
+            'soft_budget_usd_per_council': 0.05, 'total_soft_budget_usd': round(0.05 * len(phases), 2),
+            'output_mode': 'deepseek_strict_tools', 'base_url': LIVE_ENV['OPENAI_BASE_URL'],
             'model': 'deepseek-flash', 'thinking': 'disabled', 'region': REGION,
             'pricing_basis': 'peak cache-miss $0.30 input / $1.20 output per million tokens',
             'pricing_source': 'https://api-docs.deepseek.com/quick_start/pricing/',
@@ -63,12 +66,12 @@ def check_usage(result):
         raise ValueError('Incomplete or over-budget council; no further paid phases will run')
 
 
-def run(session, account, state_dir, output):
+def run(session, account, state_dir, output, *, memory_only=False):
     from botocore.config import Config
     if (output / 'run-started.json').exists():
         raise ValueError('A run already started here; choose a new directory rather than replaying paid calls')
     output.mkdir(parents=True, exist_ok=True, mode=0o700)
-    save(output / 'plan.json', plan())
+    save(output / 'plan.json', plan(memory_only))
     original = json.loads((state_dir / 'aws-runtime-state.json').read_text())
     integrations = json.loads((state_dir / 'aws-integrations-state.json').read_text())
     if any(state['account'] != account or state['region'] != REGION for state in (original, integrations)):
@@ -132,8 +135,8 @@ def run(session, account, state_dir, output):
     try:
         ready = publish(control, current, dict(env) | LIVE_ENV)
         report['live_runtime_version'] = ready['agentRuntimeVersion']
-        request = plan()['request']
-        for phase in PHASES:
+        request = plan(memory_only)['request']
+        for phase in plan(memory_only)['phases']:
             value = copy.deepcopy(request)
             if phase == 'memory-default-30':
                 written = invoke('confirm-preference', {'operation': 'confirm_preference', 'confirmed': True,
@@ -164,8 +167,13 @@ def run(session, account, state_dir, output):
                 assert memory['event_id'] is None
             elif phase == 'memory-default-30':
                 assert memory['event_id'] == created_event and memory['applied'] is True
+                assert memory['available_minutes'] is None and memory['effective_investment_ceiling'] == 30
             else:
                 assert memory['precedence'] == 'current_request' and memory['conflict'] is True
+            if phase in ('memory-default-30', 'current-request-60'):
+                cap = 30 if phase == 'memory-default-30' else 60
+                assert all(p['suggested_minutes'] <= cap for name in ('round1', 'round2') for p in result[name].values())
+                assert result['proposed_plan']['maximum_minutes'] <= cap
         assert len({p['context_sources']['time_summary']['snapshot_sha256'] for p in report['phases']}) == 1
         report['status'] = 'complete'
     except Exception as error:
@@ -220,9 +228,10 @@ if __name__ == '__main__':
     parser.add_argument('--profile')
     parser.add_argument('--account-id')
     parser.add_argument('--live', action='store_true')
+    parser.add_argument('--memory-only', action='store_true', help='Only the two Memory and current-request councils')
     args = parser.parse_args()
     if args.command == 'plan':
-        save(args.output / 'plan.json', plan(), exclusive=True)
+        save(args.output / 'plan.json', plan(args.memory_only), exclusive=True)
         print(args.output / 'plan.json')
     else:
         if not args.live or not args.profile or not args.account_id:
@@ -230,7 +239,7 @@ if __name__ == '__main__':
         for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
             os.environ.pop(name, None)
         session, identity = session_for(args.profile, args.account_id)
-        result = run(session, args.account_id, args.state_dir, args.output)
+        result = run(session, args.account_id, args.state_dir, args.output, memory_only=args.memory_only)
         print(json.dumps({k: result.get(k) for k in ('status', 'known_model_calls', 'known_model_estimated_usd',
                                                    'fake_restored', 'demo_event_deleted')}, indent=2))
         raise SystemExit(0 if result['status'] == 'complete' and result['fake_restored'] and result['demo_event_deleted'] else 1)

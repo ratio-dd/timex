@@ -70,8 +70,15 @@ class DeliberationRequest(Contract):
     requested_minutes: int = Field(default=180, ge=0, le=1440)
     available_minutes: int | None = Field(default=None, ge=0, le=1440,
                                           description="已确认的本窗口可投入硬上限；未知时不填，不从历史记录推断")
+    preference_max_minutes: int | None = Field(default=None, ge=0, le=1440,
+                                               description="服务端读取的历史默认投入上限；不是实际可用时间，当前明确上限优先")
     constraints: list[str] = Field(default_factory=list, max_length=20)
     time_summary: TimeSummary
+
+    @property
+    def investment_ceiling(self):
+        bound = self.available_minutes if self.available_minutes is not None else self.preference_max_minutes
+        return min(self.requested_minutes, bound) if bound is not None else self.requested_minutes
 
     @model_validator(mode="after")
     def check_window(self):

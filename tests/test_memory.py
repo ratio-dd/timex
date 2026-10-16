@@ -67,13 +67,15 @@ def test_confirm_read_correct_delete_across_new_requests(store, request_data):
     assert status == 200 and saved['memory']['event_id']
     body, status = runtime.handle_invocation({'request': request_data, 'use_memory': True})
     assert status == 200 and body['usage']['provider'] == 'fake'
-    assert body['context_sources']['memory']['effective_available_minutes'] == 30
+    assert body['context_sources']['memory']['effective_investment_ceiling'] == 30
+    assert body['context_sources']['memory']['available_minutes'] is None
     assert all(p['suggested_minutes'] <= 30 for p in body['round1'].values())
     corrected, status = runtime.handle_invocation(confirm(45) | {'operation': 'correct_preference'})
     assert status == 200 and corrected['deleted_event_count'] == 1
     assert len(store.events) == 1
     value, source = memory.apply_preference(DeliberationRequest.model_validate(request_data))
-    assert value.available_minutes == 45 and source['event_id'] == corrected['memory']['event_id']
+    assert value.available_minutes is None and value.preference_max_minutes == 45
+    assert source['event_id'] == corrected['memory']['event_id']
     deleted, status = runtime.handle_invocation({'operation': 'delete_preference', 'confirmed': True})
     assert status == 200 and deleted['deleted_event_count'] == 1
     assert store.events == []
@@ -89,6 +91,7 @@ def test_current_structured_limit_overrides_remembered_default(store, request_da
     request = DeliberationRequest.model_validate(request_data)
     value, source = memory.apply_preference(request)
     assert value.available_minutes == current
+    assert value.preference_max_minutes is None and value.investment_ceiling == current
     assert value.constraints == request.constraints
     assert source['precedence'] == 'current_request' and source['applied'] is False
     assert source['conflict'] is True
@@ -128,3 +131,22 @@ def test_incomplete_paginated_history_is_not_used_as_current_preference(store):
     store.list_events = lambda **kwargs: {'events': [], 'nextToken': 'more'}
     with pytest.raises(ValueError, match='bounded'):
         memory.confirmed_events(store, {})
+
+
+@pytest.mark.parametrize('minutes', [0, 30])
+def test_memory_cap_preserves_confirmed_time_facts_and_does_not_invent_availability(store, request_data, minutes):
+    request_data['constraints'].append('已确认有90分钟自主时段，不必用满。')
+    runtime.handle_invocation(confirm(minutes))
+    value, source = memory.apply_preference(DeliberationRequest.model_validate(request_data))
+    assert value.available_minutes is None and value.preference_max_minutes == minutes
+    assert value.investment_ceiling == minutes
+    assert '已确认有90分钟自主时段，不必用满。' in value.constraints
+    assert source['available_minutes'] is None and source['effective_investment_ceiling'] == minutes
+    body, status = runtime.handle_invocation({'request': request_data, 'use_memory': True})
+    assert status == 200 and body['status'] == 'complete'
+    assert body['proposed_plan']['maximum_minutes'] <= minutes
+
+
+def test_http_cannot_inject_server_memory_cap(request_data):
+    body, status = runtime.handle_invocation({'request': request_data | {'preference_max_minutes': 500}})
+    assert status == 400 and body['errors'] == ['invalid_request']

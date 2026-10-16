@@ -40,6 +40,7 @@ def test_stage_prompts_preserve_snapshot_and_availability_boundaries(monkeypatch
         contract = json.loads(instruction.splitlines()[-1])
         assert payload['request'] == request.model_dump(mode='json')
         assert payload['request']['available_minutes'] == available_minutes
+        assert '非功利探索不以职业收益、作品或收入为必要门槛' in instruction
         # A role must receive only its current-stage task, not the coordinator's task.
         assert f'当前阶段：{stage}。' in instruction
         assert all(f'当前阶段：{other}。' not in instruction

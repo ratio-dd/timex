@@ -24,6 +24,9 @@ def test_plan_is_three_councils_with_explicit_total_budget():
     assert plan['total_soft_budget_usd'] == pytest.approx(3 * plan['soft_budget_usd_per_council'])
     assert plan['request']['available_minutes'] is None and plan['request']['requested_minutes'] == 90
     assert '合成' in plan['request']['question']
+    memory = demo.plan(memory_only=True)
+    assert memory['phases'] == ['memory-default-30', 'current-request-60']
+    assert memory['maximum_model_calls'] == 20 and memory['total_soft_budget_usd'] == 0.1
 
 
 def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(monkeypatch, tmp_path):
