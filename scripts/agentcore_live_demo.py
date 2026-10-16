@@ -149,6 +149,15 @@ def run(session, account, state_dir, output):
                 'round2_minutes': {r: p['suggested_minutes'] for r, p in result['round2'].items()},
                 'plan': result['proposed_plan'], 'context_sources': result['context_sources']})
             save(output / 'summary.json', report)
+            council = CouncilResult.model_validate({k: v for k, v in result.items() if k != 'context_sources'})
+            save(output / (phase + '-context.json'), result['context_sources'])
+            readable = output / (phase + '.html')
+            readable.write_text(html(phase,
+                '<p>实际 AgentCore + DeepSeek；完全合成情境，原始发言未经改写。partial 结果不会补写缺失角色或综合方案。</p>'
+                + render_markdown(markdown(council))))
+            readable.chmod(0o600)
+            print(json.dumps({'phase': phase, 'status': result['status'], 'calls': result['usage']['model_calls'],
+                              'estimated_usd': result['usage']['estimated_usd']}, ensure_ascii=False), flush=True)
             check_usage(result)
             memory = result['context_sources']['memory']
             if phase == 'without-preference':
@@ -157,12 +166,6 @@ def run(session, account, state_dir, output):
                 assert memory['event_id'] == created_event and memory['applied'] is True
             else:
                 assert memory['precedence'] == 'current_request' and memory['conflict'] is True
-            council = CouncilResult.model_validate({k: v for k, v in result.items() if k != 'context_sources'})
-            save(output / (phase + '-context.json'), result['context_sources'])
-            (output / (phase + '.html')).write_text(html(phase,
-                '<p>实际 AgentCore + DeepSeek；完全合成情境，原始发言未经改写。</p>' + render_markdown(markdown(council))))
-            print(json.dumps({'phase': phase, 'status': result['status'], 'calls': result['usage']['model_calls'],
-                              'estimated_usd': result['usage']['estimated_usd']}, ensure_ascii=False), flush=True)
         assert len({p['context_sources']['time_summary']['snapshot_sha256'] for p in report['phases']}) == 1
         report['status'] = 'complete'
     except Exception as error:

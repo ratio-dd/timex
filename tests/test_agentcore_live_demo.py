@@ -50,7 +50,7 @@ def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(
 
         def invoke_agent_runtime(self, **kwargs):
             calls.append(kwargs)
-            result = {'status': 'partial', 'usage': {'provider': 'openai', 'model_calls': 1,
+            result = {'question': 'Synthetic partial council', 'status': 'partial', 'usage': {'provider': 'openai', 'model_calls': 1,
                       'budget_estimated_usd': 0.001, 'estimated_usd': 0.001},
                       'round1': {}, 'round2': {}, 'proposed_plan': None, 'context_sources': {}}
             return {'statusCode': 200, 'ResponseMetadata': {'RequestId': 'synthetic'},
@@ -70,4 +70,6 @@ def test_partial_first_council_restores_fake_and_stops_without_more_model_calls(
     assert published[0]['TIMEX_ALLOW_LIVE'] == '1' and published[-1] == env
     assert result['fake_restored'] is True and result['status'] == 'failed_or_partial'
     assert result['known_model_calls'] == 1 and result['measurement_complete'] is False
+    readable = (tmp_path / 'report/without-preference.html').read_text()
+    assert 'partial' in readable and 'Synthetic partial council' in readable
     assert json.loads((state_dir / 'aws-runtime-state.json').read_text())['agentRuntimeVersion'] == '2'

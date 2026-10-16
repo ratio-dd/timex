@@ -196,7 +196,7 @@ python scripts/integrations_cloud.py runtime-update \
   --archive build/timex-runtime-py312-arm64.zip --profile "$TIMEX_AWS_PROFILE" --account-id "$TIMEX_ACCOUNT_ID"
 ```
 
-已有项目 Secret 时会写入新版本，因此仅在首次配置或明确轮换时上传；上传后执行一次 Runtime 更新，避免复用进程内缓存的旧 Key。Runtime 环境只存 `TIMEX_DEEPSEEK_SECRET_ARN`，继续 `MODEL_PROVIDER=fake`、`TIMEX_ALLOW_LIVE=0`；这不证明 Key 对 DeepSeek 有效、Runtime 能以执行角色成功取值，或外部模型网络已通。本轮仅完成 Secrets Manager 存取一致性校验，未调用付费模型，也未启用 AgentCore Identity API key provider。后续 live 仍需单独明确开启服务端、配置模型/价格/预算并在请求显式指定 `live=true`。
+已有项目 Secret 时会写入新版本，因此仅在首次配置或明确轮换时上传；上传后执行一次 Runtime 更新，避免复用进程内缓存的旧 Key。Runtime 环境只存 `TIMEX_DEEPSEEK_SECRET_ARN`，日常保持 `MODEL_PROVIDER=fake`、`TIMEX_ALLOW_LIVE=0`。2026-10-15 的上传只验证了 Secrets Manager 存取一致性；2026-10-16 经单独授权，已通过下节实际模型请求验证执行角色取 Key 与 DeepSeek 外部网络路径。没有启用 AgentCore Identity API key provider。后续 live 仍需明确开启服务端、配置模型/价格/预算并在请求显式指定 `live=true`。
 
 ### 已授权的云端 DeepSeek 小额对照
 
@@ -214,6 +214,18 @@ python scripts/agentcore_live_demo.py run --live \
 运行期间短暂开启服务端 live；`finally` 恢复原始 fake 环境，并让 DEFAULT 指向恢复配置后的新版本，删除本轮带唯一标记的合成偏好，每个 Runtime 会话都请求停止。恢复失败会写入报告并返回非零状态；目录中的 `restore-request.json` 保留无明文 Key 的原始配置，供检查恢复。已有偏好的合成流会被拒绝，避免覆盖其他数据；已启动目录不能再次执行，避免意外重复付费。其他工作树可用 `--state-dir` 指向已有本地部署状态目录。
 
 报告保留在指定目录：`plan.json`、`summary.json`、逐场输入/完整结果及可读 HTML。相同事实快照不意味着模型必定改变立场；用户反馈、语义审阅与工程检查分开记录。AWS 服务费用另计，文章和私人输入不进入此流程。
+
+2026-10-16 实际运行结果（合成输入，`deepseek-flash`，无人工改写或强制预定结论）：
+
+| 场景 | 结果 | 角色建议 / 综合 | 模型调用与估算费用 |
+| --- | --- | --- | --- |
+| Gateway 摘要，无记忆偏好 | complete | 首轮事业/探索/生活/健康为 45/90/60/45；第二轮均为45，综合默认45、条件上限90，保留分块与追加条件的分歧 | 9 次，$0.0122793 |
+| 新会话读取 Memory 默认30分钟 | partial | 首轮四角色均30；第二轮健康角色未通过输出契约，无综合方案 | 9 次，$0.0112800，包含失败及修复调用 |
+| 当前请求覆盖为60分钟 | 未执行 | 第二场失败后按计划中止，不能宣称该场真实模型验收通过；此前 fake 覆盖测试仍独立保留 | 0 次 |
+
+第二场先出现 `json_invalid`，消耗全局一次修复额度；后续健康角色输出 `extra_forbidden`，因此如实返回 partial，没有放宽校验或补写发言。两场共18次模型调用，按配置价估算 $0.0235593，AWS费用未测量；测试会话停止、合成偏好删除，服务已恢复 v6 的 fake 配置。原件在 `outputs/agentcore-live-demo-2026-10-16/`，不是公开仓库内容。
+
+这组输入明确了未来自主时段、当前精力和非功利目标，为非零建议提供依据；它与此前本地旧案例不是同一输入，不能直接证明提示词质量提升。仍观察到旧条件被说成新让步，以及记忆默认上限被模型误读为实际可用时间的风险；结构通过不代表语义正确。
 
 ### 权限、证据与资源保留
 
@@ -248,10 +260,10 @@ python scripts/agentcore_live_demo.py run --live \
 | Issue | 已有工程证据 | 尚缺 / 后续处理 |
 | --- | --- | --- |
 | [#8 协商体验](https://github.com/ratio-dd/timex/issues/8) | 角色与分阶段提示词、保留两轮、边界测试和已有实测反馈 | 旧条件被写成新让步、职业产出成为探索门槛、总投入被误读为连续投入仍需语义回归；用户体验反馈和 demo 定稿待完成。工程源码按用户本次指令推送，文章发布另行决定 |
-| [#9 Runtime](https://github.com/ratio-dd/timex/issues/9) | 薄 HTTP 入口、Linux ARM64 CodeZip、预检与实际云端 fake、会话停止 | PR/配置审阅；执行角色取 Secret 和外部 DeepSeek 网络/实际会议；AWS 费用与日志保留。Key 上传不等于 live 验收 |
-| [#11 Gateway](https://github.com/ratio-dd/timex/issues/11) | Lambda 目标实调、一次冻结摘要、统计语义复用、未签名 401 | 外部 atimelogger-mcp 直接兼容性仍未实测；DeepSeek 会议与可读体验验收、云服务费用。私人账户接入不是当前合成 demo 的必要项 |
-| [#13 Memory](https://github.com/ratio-dd/timex/issues/13) | 云端短期事件写入/跨会话读取/覆盖/更正/删除，五组前后对照 | 可信调用者到 actor 的绑定；真实模型前后体验；若采用长期提取，另行核对账户、策略、后台模型、权限、费用及授权，不把短期事件当长期记忆 |
-| [#12 IAM 与凭证](https://github.com/ratio-dd/timex/issues/12) | 执行角色权限草案/实际策略、Gateway 拒绝证据、Secrets Manager 存储路径 | 非 root 登录继续暂缓；部署/调用者最小权限、执行角色取 Secret 与拒绝/失效、Memory 身份绑定及配置审阅仍待验证 |
+| [#9 Runtime](https://github.com/ratio-dd/timex/issues/9) | 薄 HTTP 入口、ARM64 CodeZip、云端 fake 与一次完整 DeepSeek 会议、执行角色取 Secret、会话停止和恢复 fake | PR/配置审阅；AWS 费用、日志保留与用户体验验收 |
+| [#11 Gateway](https://github.com/ratio-dd/timex/issues/11) | Lambda 目标实调、一次冻结摘要、统计语义复用、未签名401；摘要已进入完整云端 DeepSeek 会议 | 外部 atimelogger-mcp 直接兼容性仍未实测；用户可读体验验收与云服务费用。私人账户接入不是当前合成 demo 的必要项 |
+| [#13 Memory](https://github.com/ratio-dd/timex/issues/13) | 云端短期事件五阶段 fake 对照；实际 DeepSeek 新会话读到偏好并影响首轮，但该场最终 partial | 完整真实模型协商及当前约束覆盖；偏好上限与可用时间的语义区分；可信调用者到 actor 的绑定。长期提取若采用需另行核对与授权 |
+| [#12 IAM 与凭证](https://github.com/ratio-dd/timex/issues/12) | 执行角色权限、Gateway 拒绝证据、Secrets Manager 与实际模型调用取 Key 路径 | 非 root 登录继续暂缓；部署/调用者最小权限、Secret 拒绝/失效、Memory 身份绑定及配置审阅仍待验证 |
 | [#10 日志与计量](https://github.com/ratio-dd/timex/issues/10) | 请求/会话 ID、应用阶段/调用/耗时记录、已有失败原因 | CloudWatch 与应用记录关联、主要耗时解释、保留/费用/清理证据；未启用完整自动模型 trace |
 | [#7 总览](https://github.com/ratio-dd/timex/issues/7)、[#14 文章](https://github.com/ratio-dd/timex/issues/14) | 本 README 和合成证据可供另一个 thread 引用 | 用户体验、文章/截图及技术隐私 review 仍独立验收；文章及其本地提交不包含在工程分支中，仓库可见性不变 |
 
